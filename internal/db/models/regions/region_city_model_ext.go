@@ -2,7 +2,8 @@ package regions
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/remotelogs"
+
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	"github.com/iwind/TeaGo/lists"
 )
 

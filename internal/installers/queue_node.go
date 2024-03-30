@@ -3,13 +3,14 @@ package installers
 import (
 	"errors"
 	"fmt"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/goman"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/numberutils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
-	"github.com/iwind/TeaGo/logs"
 	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/goman"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"github.com/iwind/TeaGo/logs"
 )
 
 var sharedNodeQueue = NewNodeQueue()

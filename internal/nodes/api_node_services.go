@@ -4,10 +4,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/rpc/services"
-	"github.com/TeaOSLab/EdgeAPI/internal/rpc/services/clients"
-	"github.com/TeaOSLab/EdgeAPI/internal/rpc/services/users"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeAPI/internal/rpc/services"
+	"github.com/dashenmiren/EdgeAPI/internal/rpc/services/clients"
+	"github.com/dashenmiren/EdgeAPI/internal/rpc/services/users"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"google.golang.org/grpc"
 )
 

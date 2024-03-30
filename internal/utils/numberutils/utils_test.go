@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/numberutils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
 )
 
 func TestMax(t *testing.T) {

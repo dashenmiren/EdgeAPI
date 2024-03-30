@@ -1,9 +1,10 @@
 package clients_test
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/clients"
-	_ "github.com/go-sql-driver/mysql"
 	"testing"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/clients"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func TestClientSystemDAO_CreateSystemIfNotExists(t *testing.T) {

@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/huaweidns"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/huaweidns"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 )

@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	teaconst "github.com/TeaOSLab/EdgeAPI/internal/const"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/cloudflare"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/cloudflare"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 )

@@ -2,13 +2,14 @@ package models
 
 import (
 	"encoding/json"
-	dbutils "github.com/TeaOSLab/EdgeAPI/internal/db/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
-	"github.com/TeaOSLab/EdgeCommon/pkg/systemconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/userconfigs"
+
+	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/userconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"

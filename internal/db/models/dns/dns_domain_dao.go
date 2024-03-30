@@ -2,16 +2,17 @@ package dns
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
+	"strings"
+	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
-	"strings"
-	"time"
 )
 
 const (

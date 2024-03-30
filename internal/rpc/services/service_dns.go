@@ -2,9 +2,10 @@ package services
 
 import (
 	"context"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/dns/dnsutils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns/dnsutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
 // DNSService DNS相关服务

@@ -1,14 +1,15 @@
 package models_test
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"testing"
+	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/logs"
 	timeutil "github.com/iwind/TeaGo/utils/time"
-	"testing"
-	"time"
 )
 
 func TestUserBandwidthStatDAO_FindUserPeekBandwidthInMonth(t *testing.T) {

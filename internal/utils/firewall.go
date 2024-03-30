@@ -4,8 +4,8 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/remotelogs"
-	executils "github.com/TeaOSLab/EdgeAPI/internal/utils/exec"
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
+	executils "github.com/dashenmiren/EdgeAPI/internal/utils/exec"
 	"github.com/iwind/TeaGo/types"
 )
 

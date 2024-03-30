@@ -4,9 +4,13 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeCommon/pkg/dnsconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
+	"io"
+	"os"
+	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -15,9 +19,6 @@ import (
 	"github.com/iwind/TeaGo/types"
 	stringutil "github.com/iwind/TeaGo/utils/string"
 	"gopkg.in/yaml.v3"
-	"io"
-	"os"
-	"time"
 )
 
 // SQLExecutor 安装或升级SQL执行器

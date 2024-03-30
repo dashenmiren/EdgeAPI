@@ -1,15 +1,16 @@
 package models_test
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"testing"
+	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
-	"testing"
-	"time"
 )
 
 func TestNewMetricStatDAO_InsertMany(t *testing.T) {

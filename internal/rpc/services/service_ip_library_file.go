@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/regions"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/regions"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/types"
 )

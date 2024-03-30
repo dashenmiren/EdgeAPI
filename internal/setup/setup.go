@@ -3,18 +3,19 @@ package setup
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/TeaOSLab/EdgeAPI/internal/configs"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/dashenmiren/EdgeAPI/internal/configs"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/cmd"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
 	"gopkg.in/yaml.v3"
-	"os"
-	"strconv"
-	"strings"
 )
 
 type Setup struct {

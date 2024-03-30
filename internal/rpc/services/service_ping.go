@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
 // PingService Ping服务

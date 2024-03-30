@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"

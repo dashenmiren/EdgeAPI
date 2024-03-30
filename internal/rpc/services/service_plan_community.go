@@ -5,7 +5,7 @@ package services
 import (
 	"context"
 
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
 // PlanService 套餐相关服务

@@ -1,4 +1,3 @@
-
 //go:build !plus
 // +build !plus
 
@@ -6,7 +5,8 @@ package services
 
 import (
 	"context"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
 // UpdateServerUAM 修改服务UAM设置

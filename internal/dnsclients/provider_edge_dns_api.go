@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	teaconst "github.com/TeaOSLab/EdgeAPI/internal/const"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/edgeapi"
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/edgeapi"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 )

@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/installers"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/sizes"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeAPI/internal/installers"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/sizes"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 )
 
 func TestNewUpgradeLimiter(t *testing.T) {

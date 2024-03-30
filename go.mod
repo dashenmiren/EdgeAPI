@@ -1,15 +1,15 @@
-module github.com/TeaOSLab/EdgeAPI
+module github.com/dashenmiren/EdgeAPI
 
 go 1.18
 
-replace github.com/TeaOSLab/EdgeCommon => ../EdgeCommon
+replace github.com/dashenmiren/EdgeCommon => ../EdgeCommon
 
 require (
-	github.com/TeaOSLab/EdgeCommon v0.0.0-00010101000000-000000000000
 	github.com/aliyun/alibaba-cloud-sdk-go v1.62.587
 	github.com/andybalholm/brotli v1.0.4
 	github.com/cespare/xxhash v1.1.0
 	github.com/cespare/xxhash/v2 v2.1.2
+	github.com/dashenmiren/EdgeCommon v0.0.0-00010101000000-000000000000
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-acme/lego/v4 v4.10.2
 	github.com/go-sql-driver/mysql v1.7.0

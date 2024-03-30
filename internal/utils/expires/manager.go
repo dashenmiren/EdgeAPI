@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/goman"
-	"github.com/TeaOSLab/EdgeAPI/internal/zero"
+	"github.com/dashenmiren/EdgeAPI/internal/goman"
+	"github.com/dashenmiren/EdgeAPI/internal/zero"
 )
 
 var SharedManager = NewManager()

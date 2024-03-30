@@ -3,7 +3,7 @@
 package models
 
 import (
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/iwind/TeaGo/dbs"
 )
 

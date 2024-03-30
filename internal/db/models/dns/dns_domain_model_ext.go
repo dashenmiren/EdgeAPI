@@ -2,7 +2,8 @@ package dns
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
+
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 )
 
 // DecodeRoutes 获取所有的线路

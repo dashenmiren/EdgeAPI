@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"

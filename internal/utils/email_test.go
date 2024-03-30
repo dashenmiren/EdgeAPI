@@ -3,7 +3,7 @@ package utils_test
 import (
 	"testing"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/iwind/TeaGo/assert"
 )
 

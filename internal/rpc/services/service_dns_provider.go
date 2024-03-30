@@ -3,9 +3,10 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/dns"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/maps"
 )
 

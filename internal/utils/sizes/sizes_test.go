@@ -1,11 +1,10 @@
-
-
 package sizes_test
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/sizes"
-	"github.com/iwind/TeaGo/assert"
 	"testing"
+
+	"github.com/dashenmiren/EdgeAPI/internal/utils/sizes"
+	"github.com/iwind/TeaGo/assert"
 )
 
 func TestSizes(t *testing.T) {

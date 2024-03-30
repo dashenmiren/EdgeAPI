@@ -4,9 +4,9 @@ import (
 	"context"
 	"net"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/shared"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
 	"github.com/iwind/TeaGo/dbs"
 	"google.golang.org/grpc/peer"
 )

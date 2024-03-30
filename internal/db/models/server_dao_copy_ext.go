@@ -5,7 +5,7 @@ package models
 import (
 	"errors"
 
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	"github.com/iwind/TeaGo/dbs"
 )
 

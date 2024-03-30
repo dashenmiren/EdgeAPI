@@ -3,8 +3,8 @@ package utils_test
 import (
 	"testing"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/dnsconfigs"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
 )
 
 func TestLookupCNAME(t *testing.T) {

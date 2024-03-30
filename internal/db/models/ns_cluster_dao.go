@@ -1,12 +1,13 @@
 package models
 
 import (
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+	"strconv"
+	"strings"
+
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
-	"strconv"
-	"strings"
 )
 
 const (

@@ -2,7 +2,8 @@ package models
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/shared"
+
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
 )
 
 // DecodeMinLength 解析最小长度

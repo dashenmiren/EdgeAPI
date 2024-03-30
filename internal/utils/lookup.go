@@ -2,15 +2,16 @@ package utils
 
 import (
 	"errors"
-	teaconst "github.com/TeaOSLab/EdgeAPI/internal/const"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/taskutils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/configutils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/dnsconfigs"
+	"sync"
+
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/taskutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
 	"github.com/fsnotify/fsnotify"
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/miekg/dns"
-	"sync"
 )
 
 var sharedDNSClient *dns.Client

@@ -3,11 +3,12 @@ package models
 import (
 	"encoding/json"
 	"errors"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/dns"
-	dbutils "github.com/TeaOSLab/EdgeAPI/internal/db/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/configutils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
+	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"

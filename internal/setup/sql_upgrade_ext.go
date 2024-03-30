@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/TeaOSLab/EdgeCommon/pkg/dnsconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/systemconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"

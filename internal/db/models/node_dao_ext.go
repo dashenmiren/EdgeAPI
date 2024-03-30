@@ -1,13 +1,12 @@
-
 //go:build !plus
 // +build !plus
 
 package models
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/zero"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/zero"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/iwind/TeaGo/dbs"
 )
 

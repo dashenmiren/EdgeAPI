@@ -3,7 +3,7 @@ package dnsutils
 import (
 	"testing"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/logs"
 )

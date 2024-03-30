@@ -2,8 +2,9 @@ package models
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/remotelogs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/ddosconfigs"
+
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ddosconfigs"
 )
 
 // DecodeDDoSProtection 解析DDOS Protection设置

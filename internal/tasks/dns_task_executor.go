@@ -2,19 +2,20 @@ package tasks
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	dnsmodels "github.com/TeaOSLab/EdgeAPI/internal/db/models/dns"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/TeaOSLab/EdgeAPI/internal/goman"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/dnsconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
-	"github.com/iwind/TeaGo/dbs"
-	"github.com/iwind/TeaGo/lists"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	dnsmodels "github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/goman"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"github.com/iwind/TeaGo/dbs"
+	"github.com/iwind/TeaGo/lists"
 )
 
 func init() {

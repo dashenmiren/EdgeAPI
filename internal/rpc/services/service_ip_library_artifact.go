@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	rpcutils "github.com/TeaOSLab/EdgeAPI/internal/rpc/utils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/iplibrary"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/iplibrary"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
 // IPLibraryArtifactService IP库制品

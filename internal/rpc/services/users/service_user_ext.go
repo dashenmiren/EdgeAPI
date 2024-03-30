@@ -6,8 +6,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/dbs"
 )
 

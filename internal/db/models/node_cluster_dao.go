@@ -3,20 +3,21 @@ package models
 import (
 	"encoding/json"
 	"errors"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/dns"
-	dbutils "github.com/TeaOSLab/EdgeAPI/internal/db/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/dnsconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/ddosconfigs"
+	"strconv"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
+	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ddosconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
-	"strconv"
 )
 
 const (

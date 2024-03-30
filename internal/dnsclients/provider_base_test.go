@@ -1,12 +1,11 @@
-
-
 package dnsclients_test
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	"testing"
+
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 )
 
 func TestBaseProvider_WrapError(t *testing.T) {

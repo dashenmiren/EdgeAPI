@@ -3,7 +3,7 @@ package instances_test
 import (
 	"testing"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/instances"
+	"github.com/dashenmiren/EdgeAPI/internal/instances"
 	"github.com/iwind/TeaGo/Tea"
 	_ "github.com/iwind/TeaGo/bootstrap"
 )

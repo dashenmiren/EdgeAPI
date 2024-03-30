@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"regexp"
 
-	teaconst "github.com/TeaOSLab/EdgeAPI/internal/const"
-	executils "github.com/TeaOSLab/EdgeAPI/internal/utils/exec"
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
+	executils "github.com/dashenmiren/EdgeAPI/internal/utils/exec"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/files"
 )

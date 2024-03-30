@@ -1,21 +1,22 @@
 package models
 
 import (
-	dbutils "github.com/TeaOSLab/EdgeAPI/internal/db/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	"github.com/TeaOSLab/EdgeAPI/internal/remotelogs"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/configutils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+	"strconv"
+	"strings"
+	"time"
+
+	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
 	stringutil "github.com/iwind/TeaGo/utils/string"
 	timeutil "github.com/iwind/TeaGo/utils/time"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type NodeLogDAO dbs.DAO

@@ -3,16 +3,17 @@ package tasks
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/goman"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/numberutils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
-	"github.com/iwind/TeaGo/maps"
-	"github.com/iwind/TeaGo/types"
 	"strings"
 	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/goman"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
+	"github.com/iwind/TeaGo/maps"
+	"github.com/iwind/TeaGo/types"
 )
 
 // HealthCheckClusterTask 单个集群的健康检查任务

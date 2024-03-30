@@ -2,11 +2,12 @@ package models
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/remotelogs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/dnsconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/ddosconfigs"
+
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
+	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ddosconfigs"
 )
 
 // DecodeDNSConfig 解析DNS配置

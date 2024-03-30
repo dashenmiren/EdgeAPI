@@ -1,11 +1,12 @@
 package ttlcache
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/expires"
-	"github.com/iwind/TeaGo/types"
 	"sync"
 	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/expires"
+	"github.com/iwind/TeaGo/types"
 )
 
 type Piece struct {

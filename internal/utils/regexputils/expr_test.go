@@ -3,7 +3,7 @@ package regexputils_test
 import (
 	"testing"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/regexputils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/regexputils"
 	"github.com/iwind/TeaGo/assert"
 )
 

@@ -1,8 +1,8 @@
 package tasks
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/remotelogs"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 )
 
 type BaseTask struct {

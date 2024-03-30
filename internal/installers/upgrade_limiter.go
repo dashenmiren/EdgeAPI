@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/sizes"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/sizes"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/iwind/TeaGo/types"
 )
 

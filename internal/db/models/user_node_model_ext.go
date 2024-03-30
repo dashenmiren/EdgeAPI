@@ -3,8 +3,9 @@ package models
 import (
 	"context"
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
+
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 )
 
 // DecodeHTTP 解析HTTP配置

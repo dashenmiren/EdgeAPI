@@ -1,19 +1,20 @@
 package services
 
 import (
-	teaconst "github.com/TeaOSLab/EdgeAPI/internal/const"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/stats"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	"github.com/TeaOSLab/EdgeAPI/internal/goman"
-	"github.com/TeaOSLab/EdgeAPI/internal/remotelogs"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
+	"strings"
+	"sync"
+	"time"
+
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/goman"
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
-	"strings"
-	"sync"
-	"time"
 )
 
 type TrafficStat struct {

@@ -3,18 +3,19 @@ package models
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/TeaOSLab/EdgeAPI/internal/remotelogs"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/zero"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/systemconfigs"
-	"github.com/TeaOSLab/EdgeCommon/pkg/userconfigs"
+	"strconv"
+	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/zero"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/userconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
-	"strconv"
-	"time"
 )
 
 type SysSettingDAO dbs.DAO

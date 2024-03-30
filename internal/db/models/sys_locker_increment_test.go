@@ -3,7 +3,7 @@ package models_test
 import (
 	"testing"
 
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 )
 
 func TestNewSysLockerIncrement(t *testing.T) {
