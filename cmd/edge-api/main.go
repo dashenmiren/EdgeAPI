@@ -4,10 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
-	"os"
-	"strings"
-
 	"github.com/dashenmiren/EdgeAPI/internal/apps"
 	"github.com/dashenmiren/EdgeAPI/internal/configs"
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
@@ -19,6 +15,9 @@ import (
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 	"github.com/iwind/gosock/pkg/gosock"
+	"log"
+	"os"
+	"strings"
 )
 
 func main() {

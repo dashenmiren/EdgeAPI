@@ -3,10 +3,6 @@ package models
 import (
 	"encoding/json"
 	"errors"
-	"net"
-	"strconv"
-	"strings"
-
 	"github.com/dashenmiren/EdgeAPI/internal/configs"
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
@@ -18,6 +14,9 @@ import (
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
+	"net"
+	"strconv"
+	"strings"
 )
 
 const (

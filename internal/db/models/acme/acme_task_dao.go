@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"net/http"
-	"time"
-
 	acmeutils "github.com/dashenmiren/EdgeAPI/internal/acme"
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
@@ -24,6 +21,8 @@ import (
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
+	"net/http"
+	"time"
 )
 
 const (
@@ -387,6 +386,7 @@ func (this *ACMETaskDAO) runTaskWithoutLog(tx *dbs.Tx, taskId int64) (isOk bool,
 			errMsg = "暂不支持此类型的DNS服务商 '" + dnsProvider.Type + "'"
 			return
 		}
+		providerInterface.SetMinTTL(int32(dnsProvider.MinTTL))
 		apiParams, err := dnsProvider.DecodeAPIParams()
 		if err != nil {
 			errMsg = "解析DNS服务商API参数时出错：" + err.Error()

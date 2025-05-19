@@ -2,13 +2,12 @@ package models_test
 
 import (
 	"encoding/json"
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/assert"
 	"github.com/iwind/TeaGo/dbs"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"testing"
 )
 
 func TestSSLCertDAO_ListCertsToUpdateOCSP(t *testing.T) {

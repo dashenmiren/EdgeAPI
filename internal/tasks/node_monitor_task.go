@@ -1,15 +1,14 @@
 package tasks
 
 import (
-	"strings"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/installers"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
+	"strings"
+	"time"
 )
 
 func init() {
@@ -162,7 +161,7 @@ func (this *NodeMonitorTask) MonitorCluster(cluster *models.NodeCluster) error {
 		}
 	}
 
-	// 检查CPU、内存、磁盘不足节点
+	// 检查CPU、内存、硬盘不足节点
 	// TODO 需要实现
 
 	return nil

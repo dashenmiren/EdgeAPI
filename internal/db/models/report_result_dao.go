@@ -1,8 +1,6 @@
 package models
 
 import (
-	"time"
-
 	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
 	"github.com/dashenmiren/EdgeCommon/pkg/reporterconfigs"
 	_ "github.com/go-sql-driver/mysql"
@@ -10,6 +8,7 @@ import (
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
+	"time"
 )
 
 type ReportResultDAO dbs.DAO

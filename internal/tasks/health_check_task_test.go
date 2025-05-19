@@ -1,10 +1,11 @@
+// Copyright 2023 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package tasks_test
 
 import (
+	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"testing"
 	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 )
 
 func TestNewHealthCheckTask(t *testing.T) {

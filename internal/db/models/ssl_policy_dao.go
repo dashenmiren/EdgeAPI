@@ -3,7 +3,6 @@ package models
 import (
 	"encoding/json"
 	"errors"
-
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/sslconfigs"

@@ -1,19 +1,18 @@
 package dbutils
 
 import (
-	"net"
-	"os"
-	"os/exec"
-	"regexp"
-	"strings"
-	"time"
-
 	executils "github.com/dashenmiren/EdgeAPI/internal/utils/exec"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/types"
+	"net"
+	"os"
+	"os/exec"
+	"regexp"
+	"strings"
+	"time"
 )
 
 // NewQuery 构造Query
@@ -201,7 +200,7 @@ func StartLocalMySQL() {
 			mysqldSafeFiles = append(mysqldSafeFiles, path)
 		}
 	}
-
+	
 	for _, mysqldSafeFile := range mysqldSafeFiles {
 		_, err := os.Stat(mysqldSafeFile)
 		if err == nil {

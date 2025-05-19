@@ -1,12 +1,13 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package dnsclients_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"
+	"testing"
 )
 
 const edgeDNSAPIDomainName = "hello2.com"

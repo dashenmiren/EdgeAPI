@@ -1,10 +1,6 @@
 package services
 
 import (
-	"strings"
-	"sync"
-	"time"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
@@ -15,6 +11,9 @@ import (
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"strings"
+	"sync"
+	"time"
 )
 
 type TrafficStat struct {

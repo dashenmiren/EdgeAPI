@@ -2,7 +2,6 @@ package models
 
 import (
 	"encoding/json"
-
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 )
 

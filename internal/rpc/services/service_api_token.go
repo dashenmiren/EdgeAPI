@@ -1,8 +1,9 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package services
 
 import (
 	"context"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"

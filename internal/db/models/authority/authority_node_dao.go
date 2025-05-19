@@ -2,7 +2,6 @@ package authority
 
 import (
 	"encoding/json"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"

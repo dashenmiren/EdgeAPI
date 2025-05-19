@@ -3,11 +3,10 @@
 package tasks_test
 
 import (
-	"testing"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
+	"time"
 )
 
 func TestDNSTaskExecutor_Loop(t *testing.T) {

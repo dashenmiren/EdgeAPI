@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"os"
 	"path/filepath"
 	"regexp"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 )
 
 type NodeInstaller struct {

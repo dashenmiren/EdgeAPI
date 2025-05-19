@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ossconfigs"
@@ -248,4 +247,28 @@ func (this *OriginService) FindEnabledOriginConfig(ctx context.Context, req *pb.
 	}
 
 	return &pb.FindEnabledOriginConfigResponse{OriginJSON: configData}, nil
+}
+
+// UpdateOriginIsOn 修改源站是否启用
+func (this *OriginService) UpdateOriginIsOn(ctx context.Context, req *pb.UpdateOriginIsOnRequest) (*pb.RPCSuccess, error) {
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+
+	var tx = this.NullTx()
+
+	if userId > 0 {
+		err = models.SharedOriginDAO.CheckUserOrigin(tx, userId, req.OriginId)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = models.SharedOriginDAO.UpdateOriginIsOn(tx, req.OriginId, req.IsOn)
+	if err != nil {
+		return nil, err
+	}
+
+	return this.Success()
 }

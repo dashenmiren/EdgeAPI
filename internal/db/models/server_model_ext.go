@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 )

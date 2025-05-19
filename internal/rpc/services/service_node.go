@@ -4,14 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
-	"net"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/andybalholm/brotli"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
@@ -28,10 +20,17 @@ import (
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ddosconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
+	"github.com/andybalholm/brotli"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/types"
 	stringutil "github.com/iwind/TeaGo/utils/string"
+	"io"
+	"net"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
 )
 
 // NodeVersionCache 节点版本缓存
@@ -966,6 +965,31 @@ func (this *NodeService) StopNode(ctx context.Context, req *pb.StopNodeRequest) 
 	}
 
 	return &pb.StopNodeResponse{IsOk: true}, nil
+}
+
+// UninstallNode 卸载节点
+func (this *NodeService) UninstallNode(ctx context.Context, req *pb.UninstallNodeRequest) (*pb.UninstallNodeResponse, error) {
+	_, err := this.ValidateAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = installers.SharedNodeQueue().UninstallNode(req.NodeId)
+	if err != nil {
+		return &pb.UninstallNodeResponse{
+			IsOk:  false,
+			Error: err.Error(),
+		}, nil
+	}
+
+	// 修改为未安装
+	var tx = this.NullTx()
+	err = models.SharedNodeDAO.UpdateNodeIsInstalled(tx, req.NodeId, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.UninstallNodeResponse{IsOk: true}, nil
 }
 
 // UpdateNodeConnectedAPINodes 更改节点连接的API节点信息

@@ -2,15 +2,16 @@ package services
 
 import (
 	"context"
-	"net"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/iputils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ipconfigs"
+	"net"
+	"time"
 )
 
 // IPItemService IP条目相关服务
@@ -26,19 +27,31 @@ func (this *IPItemService) CreateIPItem(ctx context.Context, req *pb.CreateIPIte
 		return nil, err
 	}
 
-	if len(req.IpFrom) == 0 {
-		return nil, errors.New("'ipFrom' should not be empty")
-	}
+	if len(req.Value) > 0 {
+		newValue, ipFrom, ipTo, ok := models.SharedIPItemDAO.ParseIPValue(req.Value)
+		if !ok {
+			return nil, errors.New("invalid 'value' format")
+		}
 
-	var ipFrom = net.ParseIP(req.IpFrom)
-	if ipFrom == nil {
-		return nil, errors.New("invalid 'ipFrom'")
-	}
+		req.Value = newValue
+		req.IpFrom = ipFrom
+		req.IpTo = ipTo
+	} else if req.Type != models.IPItemTypeAll {
+		if !iputils.IsValid(req.IpFrom) {
+			return nil, errors.New("invalid 'ipFrom'")
+		}
+		if len(req.IpTo) > 0 {
+			if !iputils.IsValid(req.IpTo) {
+				return nil, errors.New("invalid 'ipTo'")
+			}
 
-	if len(req.IpTo) > 0 {
-		ipTo := net.ParseIP(req.IpTo)
-		if ipTo == nil {
-			return nil, errors.New("invalid 'ipTo'")
+			if !iputils.IsSameVersion(req.IpFrom, req.IpTo) {
+				return nil, errors.New("'ipFrom' and 'ipTo' should be in same version")
+			}
+
+			if iputils.CompareIP(req.IpFrom, req.IpTo) > 0 {
+				req.IpFrom, req.IpTo = req.IpTo, req.IpFrom
+			}
 		}
 	}
 
@@ -65,7 +78,7 @@ func (this *IPItemService) CreateIPItem(ctx context.Context, req *pb.CreateIPIte
 		return nil, err
 	}
 
-	itemId, err := models.SharedIPItemDAO.CreateIPItem(tx, req.IpListId, req.IpFrom, req.IpTo, req.ExpiredAt, req.Reason, req.Type, req.EventLevel, req.NodeId, req.ServerId, req.SourceNodeId, req.SourceServerId, req.SourceHTTPFirewallPolicyId, req.SourceHTTPFirewallRuleGroupId, req.SourceHTTPFirewallRuleSetId, true)
+	itemId, err := models.SharedIPItemDAO.CreateIPItem(tx, req.IpListId, req.Value, req.IpFrom, req.IpTo, req.ExpiredAt, req.Reason, req.Type, req.EventLevel, req.NodeId, req.ServerId, req.SourceNodeId, req.SourceServerId, req.SourceHTTPFirewallPolicyId, req.SourceHTTPFirewallRuleGroupId, req.SourceHTTPFirewallRuleSetId, true)
 	if err != nil {
 		return nil, err
 	}
@@ -85,19 +98,30 @@ func (this *IPItemService) CreateIPItems(ctx context.Context, req *pb.CreateIPIt
 
 	// 校验
 	for _, item := range req.IpItems {
-		if len(item.IpFrom) == 0 {
-			return nil, errors.New("'ipFrom' should not be empty")
-		}
+		if len(item.Value) > 0 {
+			newValue, ipFrom, ipTo, ok := models.SharedIPItemDAO.ParseIPValue(item.Value)
+			if !ok {
+				return nil, errors.New("invalid 'value': " + item.Value)
+			}
+			item.Value = newValue
+			item.IpFrom = ipFrom
+			item.IpTo = ipTo
+		} else if item.Type != models.IPItemTypeAll {
+			if !iputils.IsValid(item.IpFrom) {
+				return nil, errors.New("invalid 'ipFrom': " + item.IpFrom)
+			}
+			if len(item.IpTo) > 0 {
+				if !iputils.IsValid(item.IpTo) {
+					return nil, errors.New("invalid 'ipTo': " + item.IpTo)
+				}
 
-		var ipFrom = net.ParseIP(item.IpFrom)
-		if ipFrom == nil {
-			return nil, errors.New("invalid 'ipFrom'")
-		}
+				if !iputils.IsSameVersion(item.IpFrom, item.IpTo) {
+					return nil, errors.New("'ipFrom' (" + item.IpFrom + ") and 'ipTo' (" + item.IpTo + ") should be in same version")
+				}
 
-		if len(item.IpTo) > 0 {
-			ipTo := net.ParseIP(item.IpTo)
-			if ipTo == nil {
-				return nil, errors.New("invalid 'ipTo'")
+				if iputils.CompareIP(item.IpFrom, item.IpTo) > 0 {
+					item.IpFrom, item.IpTo = item.IpTo, item.IpFrom
+				}
 			}
 		}
 
@@ -118,21 +142,21 @@ func (this *IPItemService) CreateIPItems(ctx context.Context, req *pb.CreateIPIt
 	}
 
 	// 创建
-	// TODO 需要区分不同的用户
 	var ipItemIds = []int64{}
 	for index, item := range req.IpItems {
 		var shouldNotify = index == len(req.IpItems)-1
 
 		// 删除以前的
-		err = models.SharedIPItemDAO.DeleteOldItem(tx, item.IpListId, item.IpFrom, item.IpTo)
+		if len(item.Value) > 0 {
+			err = models.SharedIPItemDAO.DeleteOldItemWithValue(tx, item.IpListId, item.Value)
+		} else {
+			err = models.SharedIPItemDAO.DeleteOldItem(tx, item.IpListId, item.IpFrom, item.IpTo)
+		}
 		if err != nil {
 			return nil, err
 		}
 
-		itemId, err := models.SharedIPItemDAO.CreateIPItem(tx, item.IpListId, item.IpFrom, item.IpTo, item.ExpiredAt, item.Reason, item.Type, item.EventLevel, item.NodeId, item.ServerId, item.SourceNodeId, item.SourceServerId, item.SourceHTTPFirewallPolicyId, item.SourceHTTPFirewallRuleGroupId, item.SourceHTTPFirewallRuleSetId, shouldNotify)
-		if err != nil {
-			return nil, err
-		}
+		itemId, err := models.SharedIPItemDAO.CreateIPItem(tx, item.IpListId, item.Value, item.IpFrom, item.IpTo, item.ExpiredAt, item.Reason, item.Type, item.EventLevel, item.NodeId, item.ServerId, item.SourceNodeId, item.SourceServerId, item.SourceHTTPFirewallPolicyId, item.SourceHTTPFirewallRuleGroupId, item.SourceHTTPFirewallRuleSetId, shouldNotify)
 		if err != nil {
 			return nil, err
 		}
@@ -154,6 +178,34 @@ func (this *IPItemService) UpdateIPItem(ctx context.Context, req *pb.UpdateIPIte
 
 	var tx = this.NullTx()
 
+	// validate ip
+	if len(req.Value) > 0 {
+		newValue, ipFrom, ipTo, ok := models.SharedIPItemDAO.ParseIPValue(req.Value)
+		if !ok {
+			return nil, errors.New("invalid 'value' format")
+		}
+		req.Value = newValue
+		req.IpFrom = ipFrom
+		req.IpTo = ipTo
+	} else if req.Type != models.IPItemTypeAll {
+		if !iputils.IsValid(req.IpFrom) {
+			return nil, errors.New("invalid 'ipFrom'")
+		}
+		if len(req.IpTo) > 0 {
+			if !iputils.IsValid(req.IpTo) {
+				return nil, errors.New("invalid 'ipTo'")
+			}
+
+			if !iputils.IsSameVersion(req.IpFrom, req.IpTo) {
+				return nil, errors.New("'ipFrom' and 'ipTo' should be in same version")
+			}
+
+			if iputils.CompareIP(req.IpFrom, req.IpTo) > 0 {
+				req.IpFrom, req.IpTo = req.IpTo, req.IpFrom
+			}
+		}
+	}
+
 	if userId > 0 {
 		listId, err := models.SharedIPItemDAO.FindItemListId(tx, req.IpItemId)
 		if err != nil {
@@ -170,7 +222,7 @@ func (this *IPItemService) UpdateIPItem(ctx context.Context, req *pb.UpdateIPIte
 		req.Type = models.IPItemTypeIPv4
 	}
 
-	err = models.SharedIPItemDAO.UpdateIPItem(tx, req.IpItemId, req.IpFrom, req.IpTo, req.ExpiredAt, req.Reason, req.Type, req.EventLevel)
+	err = models.SharedIPItemDAO.UpdateIPItem(tx, req.IpItemId, req.Value, req.IpFrom, req.IpTo, req.ExpiredAt, req.Reason, req.Type, req.EventLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -188,18 +240,40 @@ func (this *IPItemService) DeleteIPItem(ctx context.Context, req *pb.DeleteIPIte
 
 	var tx = this.NullTx()
 
+	if req.IpItemId <= 0 && len(req.Value) == 0 && len(req.IpFrom) == 0 {
+		return nil, errors.New("one of 'ipItemId', 'value' or 'ipFrom' params required")
+	}
+
 	// 如果是使用IPItemId删除
 	if req.IpItemId > 0 {
 		err = models.SharedIPItemDAO.DisableIPItem(tx, req.IpItemId, userId)
 		if err != nil {
 			return nil, err
 		}
+		return this.Success()
+	}
+
+	// 使用value删除
+	if len(req.Value) > 0 {
+		// 检查IP列表
+		if req.IpListId > 0 && userId > 0 && !firewallconfigs.IsGlobalListId(req.IpListId) {
+			err = models.SharedIPListDAO.CheckUserIPList(tx, userId, req.IpListId)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		err = models.SharedIPItemDAO.DisableIPItemsWithIPValue(tx, req.Value, userId, req.IpListId)
+		if err != nil {
+			return nil, err
+		}
+		return this.Success()
 	}
 
 	// 如果是使用ipFrom+ipTo删除
 	if len(req.IpFrom) > 0 {
 		// 检查IP列表
-		if req.IpListId > 0 && userId > 0 && req.IpListId != firewallconfigs.GlobalListId {
+		if req.IpListId > 0 && userId > 0 && !firewallconfigs.IsGlobalListId(req.IpListId) {
 			err = models.SharedIPListDAO.CheckUserIPList(tx, userId, req.IpListId)
 			if err != nil {
 				return nil, err
@@ -210,6 +284,7 @@ func (this *IPItemService) DeleteIPItem(ctx context.Context, req *pb.DeleteIPIte
 		if err != nil {
 			return nil, err
 		}
+		return this.Success()
 	}
 
 	return this.Success()
@@ -244,7 +319,7 @@ func (this *IPItemService) CountIPItemsWithListId(ctx context.Context, req *pb.C
 
 	if userId > 0 {
 		// 检查用户所属名单
-		if req.IpListId != firewallconfigs.GlobalListId {
+		if !firewallconfigs.IsGlobalListId(req.IpListId) {
 			err = models.SharedIPListDAO.CheckUserIPList(tx, userId, req.IpListId)
 			if err != nil {
 				return nil, err
@@ -271,7 +346,7 @@ func (this *IPItemService) ListIPItemsWithListId(ctx context.Context, req *pb.Li
 
 	if userId > 0 {
 		// 检查用户所属名单
-		if req.IpListId != firewallconfigs.GlobalListId {
+		if !firewallconfigs.IsGlobalListId(req.IpListId) {
 			err = models.SharedIPListDAO.CheckUserIPList(tx, userId, req.IpListId)
 			if err != nil {
 				return nil, err
@@ -283,7 +358,7 @@ func (this *IPItemService) ListIPItemsWithListId(ctx context.Context, req *pb.Li
 	if err != nil {
 		return nil, err
 	}
-	result := []*pb.IPItem{}
+	var result = []*pb.IPItem{}
 	for _, item := range items {
 		if len(item.Type) == 0 {
 			item.Type = models.IPItemTypeIPv4
@@ -346,6 +421,7 @@ func (this *IPItemService) ListIPItemsWithListId(ctx context.Context, req *pb.Li
 
 		result = append(result, &pb.IPItem{
 			Id:                            int64(item.Id),
+			Value:                         item.ComposeValue(),
 			IpFrom:                        item.IpFrom,
 			IpTo:                          item.IpTo,
 			Version:                       int64(item.Version),
@@ -403,6 +479,7 @@ func (this *IPItemService) FindEnabledIPItem(ctx context.Context, req *pb.FindEn
 
 	return &pb.FindEnabledIPItemResponse{IpItem: &pb.IPItem{
 		Id:         int64(item.Id),
+		Value:      item.ComposeValue(),
 		IpFrom:     item.IpFrom,
 		IpTo:       item.IpTo,
 		Version:    int64(item.Version),
@@ -426,12 +503,17 @@ func (this *IPItemService) ListIPItemsAfterVersion(ctx context.Context, req *pb.
 
 	var tx = this.NullTx()
 
-	result := []*pb.IPItem{}
+	var result = []*pb.IPItem{}
 	items, err := models.SharedIPItemDAO.ListIPItemsAfterVersion(tx, req.Version, req.Size)
 	if err != nil {
 		return nil, err
 	}
+
+	var latestVersion = req.Version
+
 	for _, item := range items {
+		latestVersion = int64(item.Version)
+
 		// 是否已过期
 		if item.ExpiredAt > 0 && int64(item.ExpiredAt) <= time.Now().Unix() {
 			item.State = models.IPItemStateDisabled
@@ -450,6 +532,11 @@ func (this *IPItemService) ListIPItemsAfterVersion(ctx context.Context, req *pb.
 			continue
 		}
 
+		// 跳过灰名单
+		if list.Type == ipconfigs.IPListTypeGrey {
+			continue
+		}
+
 		// 如果已经删除
 		if list.State != models.IPListStateEnabled {
 			item.State = models.IPItemStateDisabled
@@ -457,6 +544,7 @@ func (this *IPItemService) ListIPItemsAfterVersion(ctx context.Context, req *pb.
 
 		result = append(result, &pb.IPItem{
 			Id:         int64(item.Id),
+			Value:      item.ComposeValue(),
 			IpFrom:     item.IpFrom,
 			IpTo:       item.IpTo,
 			Version:    int64(item.Version),
@@ -474,7 +562,10 @@ func (this *IPItemService) ListIPItemsAfterVersion(ctx context.Context, req *pb.
 		})
 	}
 
-	return &pb.ListIPItemsAfterVersionResponse{IpItems: result}, nil
+	return &pb.ListIPItemsAfterVersionResponse{
+		IpItems: result,
+		Version: latestVersion,
+	}, nil
 }
 
 // CheckIPItemStatus 检查IP状态
@@ -485,14 +576,13 @@ func (this *IPItemService) CheckIPItemStatus(ctx context.Context, req *pb.CheckI
 	}
 
 	// 校验IP
-	ip := net.ParseIP(req.Ip)
+	var ip = net.ParseIP(req.Ip)
 	if len(ip) == 0 {
 		return &pb.CheckIPItemStatusResponse{
 			IsOk:  false,
 			Error: "请输入正确的IP",
 		}, nil
 	}
-	ipLong := utils.IP2Long(req.Ip)
 
 	var tx = this.NullTx()
 
@@ -507,10 +597,10 @@ func (this *IPItemService) CheckIPItemStatus(ctx context.Context, req *pb.CheckI
 			Error: "IP名单不存在",
 		}, nil
 	}
-	var isAllowed = list.Type == "white"
+	var isAllowed = list.Type == ipconfigs.IPListTypeWhite || list.Type == ipconfigs.IPListTypeGrey
 
 	// 检查IP名单
-	item, err := models.SharedIPItemDAO.FindEnabledItemContainsIP(tx, req.IpListId, ipLong)
+	item, err := models.SharedIPItemDAO.FindEnabledItemContainsIP(tx, req.IpListId, req.Ip)
 	if err != nil {
 		return nil, err
 	}
@@ -522,6 +612,7 @@ func (this *IPItemService) CheckIPItemStatus(ctx context.Context, req *pb.CheckI
 			IsAllowed: isAllowed,
 			IpItem: &pb.IPItem{
 				Id:         int64(item.Id),
+				Value:      item.ComposeValue(),
 				IpFrom:     item.IpFrom,
 				IpTo:       item.IpTo,
 				CreatedAt:  int64(item.CreatedAt),
@@ -529,6 +620,7 @@ func (this *IPItemService) CheckIPItemStatus(ctx context.Context, req *pb.CheckI
 				Reason:     item.Reason,
 				Type:       item.Type,
 				EventLevel: item.EventLevel,
+				ListType:   list.Type,
 			},
 		}, nil
 	}
@@ -569,11 +661,7 @@ func (this *IPItemService) CountAllEnabledIPItems(ctx context.Context, req *pb.C
 	}
 
 	var tx = this.NullTx()
-	var listId int64 = 0
-	if req.GlobalOnly {
-		listId = firewallconfigs.GlobalListId
-	}
-	count, err := models.SharedIPItemDAO.CountAllEnabledIPItems(tx, userId, req.Keyword, req.Ip, listId, req.Unread, req.EventLevel, req.ListType)
+	count, err := models.SharedIPItemDAO.CountAllEnabledIPItems(tx, userId, req.Keyword, req.Ip, 0, req.Unread, req.EventLevel, req.ListType, req.GlobalOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -593,11 +681,7 @@ func (this *IPItemService) ListAllEnabledIPItems(ctx context.Context, req *pb.Li
 
 	var results = []*pb.ListAllEnabledIPItemsResponse_Result{}
 	var tx = this.NullTx()
-	var listId int64 = 0
-	if req.GlobalOnly {
-		listId = firewallconfigs.GlobalListId
-	}
-	items, err := models.SharedIPItemDAO.ListAllEnabledIPItems(tx, userId, req.Keyword, req.Ip, listId, req.Unread, req.EventLevel, req.ListType, req.Offset, req.Size)
+	items, err := models.SharedIPItemDAO.ListAllEnabledIPItems(tx, userId, req.Keyword, req.Ip, 0, req.Unread, req.EventLevel, req.ListType, req.GlobalOnly, req.Offset, req.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -677,6 +761,7 @@ func (this *IPItemService) ListAllEnabledIPItems(ctx context.Context, req *pb.Li
 
 		var pbItem = &pb.IPItem{
 			Id:                            int64(item.Id),
+			Value:                         item.ComposeValue(),
 			IpFrom:                        item.IpFrom,
 			IpTo:                          item.IpTo,
 			Version:                       int64(item.Version),
@@ -720,10 +805,10 @@ func (this *IPItemService) ListAllEnabledIPItems(ctx context.Context, req *pb.Li
 			IsGlobal: list.IsGlobal,
 		}
 
-		// 所属服务（注意同SourceServer不同）
+		// 所属服务（注意与SourceServer不同）
 		var pbFirewallServer *pb.Server
 
-		// 所属策略（注意同SourceHTTPFirewallPolicy不同）
+		// 所属策略（注意与SourceHTTPFirewallPolicy不同）
 		var pbFirewallPolicy *pb.HTTPFirewallPolicy
 		if !list.IsPublic {
 			policy, err := models.SharedHTTPFirewallPolicyDAO.FindEnabledFirewallPolicyWithIPListId(tx, int64(list.Id))
@@ -781,11 +866,7 @@ func (this *IPItemService) ListAllIPItemIds(ctx context.Context, req *pb.ListAll
 	}
 
 	var tx = this.NullTx()
-	var listId int64 = 0
-	if req.GlobalOnly {
-		listId = firewallconfigs.GlobalListId
-	}
-	itemIds, err := models.SharedIPItemDAO.ListAllIPItemIds(tx, userId, req.Keyword, req.Ip, listId, req.Unread, req.EventLevel, req.ListType, req.Offset, req.Size)
+	itemIds, err := models.SharedIPItemDAO.ListAllIPItemIds(tx, userId, req.Keyword, req.Ip, 0, req.Unread, req.EventLevel, req.ListType, req.Offset, req.Size)
 	if err != nil {
 		return nil, err
 	}

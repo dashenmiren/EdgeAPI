@@ -1,9 +1,6 @@
 package models
 
 import (
-	"sync"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
@@ -14,6 +11,8 @@ import (
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"sync"
+	"time"
 )
 
 type MetricSumStatDAO dbs.DAO

@@ -1,10 +1,11 @@
+// Copyright 2023 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package taskutils_test
 
 import (
+	"github.com/dashenmiren/EdgeAPI/internal/utils/taskutils"
 	"sync"
 	"testing"
-
-	"github.com/dashenmiren/EdgeAPI/internal/utils/taskutils"
 )
 
 func TestRunConcurrent(t *testing.T) {

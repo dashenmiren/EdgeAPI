@@ -2,11 +2,10 @@ package main
 
 import (
 	"flag"
-	"os"
-	"os/exec"
-
 	"github.com/dashenmiren/EdgeAPI/internal/installers/helpers"
 	"github.com/iwind/gosock/pkg/gosock"
+	"os"
+	"os/exec"
 )
 
 func main() {

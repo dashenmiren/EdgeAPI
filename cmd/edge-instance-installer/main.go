@@ -1,13 +1,14 @@
+// Copyright 2024 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package main
 
 import (
 	"fmt"
-	"log"
-	"os"
-
 	"github.com/dashenmiren/EdgeAPI/internal/instances"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/lists"
+	"log"
+	"os"
 )
 
 func main() {

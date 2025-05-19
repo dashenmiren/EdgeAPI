@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
@@ -25,7 +24,7 @@ func (this *DNSProviderService) CreateDNSProvider(ctx context.Context, req *pb.C
 
 	var tx = this.NullTx()
 
-	providerId, err := dns.SharedDNSProviderDAO.CreateDNSProvider(tx, adminId, userId, req.Type, req.Name, req.ApiParamsJSON)
+	providerId, err := dns.SharedDNSProviderDAO.CreateDNSProvider(tx, adminId, userId, req.Type, req.Name, req.ApiParamsJSON, req.MinTTL)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +59,7 @@ func (this *DNSProviderService) UpdateDNSProvider(ctx context.Context, req *pb.U
 		return nil, err
 	}
 
-	err = dns.SharedDNSProviderDAO.UpdateDNSProvider(tx, req.DnsProviderId, req.Name, req.ApiParamsJSON)
+	err = dns.SharedDNSProviderDAO.UpdateDNSProvider(tx, req.DnsProviderId, req.Name, req.ApiParamsJSON, req.MinTTL)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +114,7 @@ func (this *DNSProviderService) ListEnabledDNSProviders(ctx context.Context, req
 			TypeName:      dnsclients.FindProviderTypeName(provider.Type),
 			ApiParamsJSON: provider.ApiParams,
 			DataUpdatedAt: int64(provider.DataUpdatedAt),
+			MinTTL:        int32(provider.MinTTL),
 		})
 	}
 	return &pb.ListEnabledDNSProvidersResponse{DnsProviders: result}, nil
@@ -149,6 +149,7 @@ func (this *DNSProviderService) FindAllEnabledDNSProviders(ctx context.Context, 
 			TypeName:      dnsclients.FindProviderTypeName(provider.Type),
 			ApiParamsJSON: provider.ApiParams,
 			DataUpdatedAt: int64(provider.DataUpdatedAt),
+			MinTTL:        int32(provider.MinTTL),
 		})
 	}
 	return &pb.FindAllEnabledDNSProvidersResponse{DnsProviders: result}, nil
@@ -219,6 +220,7 @@ func (this *DNSProviderService) FindEnabledDNSProvider(ctx context.Context, req 
 			TypeName:      dnsclients.FindProviderTypeName(provider.Type),
 			ApiParamsJSON: provider.ApiParams,
 			DataUpdatedAt: int64(provider.DataUpdatedAt),
+			MinTTL:        int32(provider.MinTTL),
 		},
 	}, nil
 }
@@ -263,6 +265,7 @@ func (this *DNSProviderService) FindAllEnabledDNSProvidersWithType(ctx context.C
 			Name:     provider.Name,
 			Type:     provider.Type,
 			TypeName: dnsclients.FindProviderTypeName(provider.Type),
+			MinTTL:   int32(provider.MinTTL),
 		})
 	}
 	return &pb.FindAllEnabledDNSProvidersWithTypeResponse{DnsProviders: result}, nil

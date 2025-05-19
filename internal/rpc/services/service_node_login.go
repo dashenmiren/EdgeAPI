@@ -1,15 +1,16 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package services
 
 import (
 	"context"
-	"net"
-	"sync"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/types"
+	"net"
+	"sync"
+	"time"
 )
 
 // NodeLoginService 节点登录相关

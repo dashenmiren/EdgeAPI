@@ -1,10 +1,11 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package expires
 
 import (
-	"testing"
-
 	"github.com/iwind/TeaGo/assert"
 	"github.com/iwind/TeaGo/logs"
+	"testing"
 )
 
 func TestNewIdKeyMap(t *testing.T) {

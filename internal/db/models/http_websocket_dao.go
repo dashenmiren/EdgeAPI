@@ -3,7 +3,6 @@ package models
 import (
 	"encoding/json"
 	"errors"
-
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
 	_ "github.com/go-sql-driver/mysql"

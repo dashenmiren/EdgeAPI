@@ -4,11 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
 	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
@@ -28,6 +23,10 @@ import (
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
@@ -159,7 +158,6 @@ func (this *ServerDAO) CreateServer(tx *dbs.Tx,
 	httpsJSON []byte,
 	tcpJSON []byte,
 	tlsJSON []byte,
-	unixJSON []byte,
 	udpJSON []byte,
 	webId int64,
 	reverseProxyJSON []byte,
@@ -206,9 +204,6 @@ func (this *ServerDAO) CreateServer(tx *dbs.Tx,
 	}
 	if IsNotNull(tlsJSON) {
 		op.Tls = tlsJSON
-	}
-	if IsNotNull(unixJSON) {
-		op.Unix = unixJSON
 	}
 	if IsNotNull(udpJSON) {
 		op.Udp = udpJSON
@@ -823,8 +818,15 @@ func (this *ServerDAO) CountAllEnabledServersMatch(tx *dbs.Tx, groupId int64, ke
 				Param("serverId", keyword).
 				Param("keyword", dbutils.QuoteLike(keyword))
 		} else {
-			query.Where("(name LIKE :keyword OR serverNames LIKE :keyword)").
-				Param("keyword", dbutils.QuoteLike(keyword))
+			if regexp.MustCompile(`^[a-z0-9.-]+$`).MatchString(keyword) {
+				// 可以搜索源站
+				query.Where("(name LIKE :keyword OR serverNames LIKE :keyword OR JSON_EXTRACT(reverseProxy, '$.reverseProxyId') IN (SELECT reverseProxyId FROM " + SharedOriginDAO.Table + " WHERE reverseProxyId > 0 AND JSON_EXTRACT(addr, '$.host')=:fullKeyword))")
+				query.Param("keyword", dbutils.QuoteLike(keyword))
+				query.Param("fullKeyword", keyword)
+			} else {
+				query.Where("(name LIKE :keyword OR serverNames LIKE :keyword)").
+					Param("keyword", dbutils.QuoteLike(keyword))
+			}
 		}
 	}
 	if userId > 0 {
@@ -866,7 +868,7 @@ func (this *ServerDAO) CountAllEnabledServersMatch(tx *dbs.Tx, groupId int64, ke
 //
 //	groupId 分组ID，如果为-1，则搜索没有分组的服务
 func (this *ServerDAO) ListEnabledServersMatch(tx *dbs.Tx, offset int64, size int64, groupId int64, keyword string, userId int64, clusterId int64, auditingFlag int32, protocolFamilies []string, order string) (result []*Server, err error) {
-	query := this.Query(tx).
+	var query = this.Query(tx).
 		State(ServerStateEnabled).
 		Offset(offset).
 		Limit(size).
@@ -885,8 +887,15 @@ func (this *ServerDAO) ListEnabledServersMatch(tx *dbs.Tx, offset int64, size in
 				Param("serverId", keyword).
 				Param("keyword", dbutils.QuoteLike(keyword))
 		} else {
-			query.Where("(name LIKE :keyword OR serverNames LIKE :keyword)").
-				Param("keyword", dbutils.QuoteLike(keyword))
+			if regexp.MustCompile(`^[a-z0-9.-]+$`).MatchString(keyword) {
+				// 可以搜索源站
+				query.Where("(name LIKE :keyword OR serverNames LIKE :keyword OR JSON_EXTRACT(reverseProxy, '$.reverseProxyId') IN (SELECT reverseProxyId FROM " + SharedOriginDAO.Table + " WHERE reverseProxyId > 0 AND JSON_EXTRACT(addr, '$.host')=:fullKeyword))")
+				query.Param("keyword", dbutils.QuoteLike(keyword))
+				query.Param("fullKeyword", keyword)
+			} else {
+				query.Where("(name LIKE :keyword OR serverNames LIKE :keyword)").
+					Param("keyword", dbutils.QuoteLike(keyword))
+			}
 		}
 	}
 	if userId > 0 {
@@ -1234,18 +1243,6 @@ func (this *ServerDAO) ComposeServerConfig(tx *dbs.Tx, server *Server, ignoreCer
 			}
 
 			config.TLS = tlsConfig
-		}
-	}
-
-	// Unix
-	if IsNotNull(server.Unix) {
-		var unixConfig = &serverconfigs.UnixProtocolConfig{}
-		err := json.Unmarshal(server.Unix, unixConfig)
-		if err != nil {
-			return nil, err
-		}
-		if !forNode || unixConfig.IsOn {
-			config.Unix = unixConfig
 		}
 	}
 
@@ -2505,7 +2502,7 @@ func (this *ServerDAO) UpdateServerTrafficLimitStatus(tx *dbs.Tx, serverId int64
 		}
 		if len(oldStatus.UntilDay) > 0 &&
 			oldStatus.UntilDay >= day /** 如果已经限制，且比当前日期长，则无需重复 **/ &&
-			oldStatus.PlanId == planId /** 套餐无变化 **/ {
+			oldStatus.PlanId == planId {
 			// no need to change
 			return nil
 		}
@@ -2556,7 +2553,7 @@ func (this *ServerDAO) UpdateServersTrafficLimitStatusWithUserPlanId(tx *dbs.Tx,
 	return nil
 }
 
-// ResetServersTrafficLimitStatusWithPlanId 重置网站限流状态
+// ResetServersTrafficLimitStatusWithPlanId 重置某个套餐相关网站限流状态
 func (this *ServerDAO) ResetServersTrafficLimitStatusWithPlanId(tx *dbs.Tx, planId int64) error {
 	return this.Query(tx).
 		Where("JSON_EXTRACT(trafficLimitStatus, '$.planId')=:planId").
@@ -2633,13 +2630,17 @@ func (this *ServerDAO) UpdateServerUserPlanId(tx *dbs.Tx, serverId int64, userPl
 		return errors.New("serverId should not be smaller than 0")
 	}
 
-	oldClusterId, err := this.Query(tx).
+	oldServerOne, queryErr := SharedServerDAO.
+		Query(tx).
 		Pk(serverId).
-		Result("clusterId").
-		FindInt64Col(0)
-	if err != nil {
-		return err
+		Result("clusterId", "userPlanId").
+		Find()
+	if queryErr != nil || oldServerOne == nil {
+		return queryErr
 	}
+	var oldServer = oldServerOne.(*Server)
+	var oldClusterId = int64(oldServer.ClusterId)
+	var oldUserPlanId = int64(oldServer.UserPlanId)
 
 	// 取消套餐
 	if userPlanId <= 0 {
@@ -2671,6 +2672,15 @@ func (this *ServerDAO) UpdateServerUserPlanId(tx *dbs.Tx, serverId int64, userPl
 		if err != nil {
 			return err
 		}
+
+		// 重置以往的用户套餐状态
+		if oldUserPlanId > 0 {
+			err = SharedUserPlanStatDAO.ResetUserPlanStatsWithUserPlanId(tx, oldUserPlanId)
+			if err != nil {
+				return err
+			}
+		}
+
 		err = this.NotifyUpdate(tx, serverId)
 		if err != nil {
 			return err
@@ -2718,6 +2728,21 @@ func (this *ServerDAO) UpdateServerUserPlanId(tx *dbs.Tx, serverId int64, userPl
 	if err != nil {
 		return err
 	}
+
+	// 重置以往的用户套餐统计状态
+	if oldUserPlanId > 0 {
+		err = SharedUserPlanStatDAO.ResetUserPlanStatsWithUserPlanId(tx, oldUserPlanId)
+		if err != nil {
+			return err
+		}
+	}
+
+	// 重置当前用户套餐统计状态
+	err = SharedUserPlanStatDAO.ResetUserPlanStatsWithUserPlanId(tx, userPlanId)
+	if err != nil {
+		return err
+	}
+
 	err = this.NotifyUpdate(tx, serverId)
 	if err != nil {
 		return err

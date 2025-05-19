@@ -1,14 +1,15 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package reporters
 
 import (
 	"context"
-	"net"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
 	"github.com/iwind/TeaGo/dbs"
 	"google.golang.org/grpc/peer"
+	"net"
 )
 
 // 校验客户端IP
@@ -37,3 +38,4 @@ func validateClient(tx *dbs.Tx, nodeId int64, ctx context.Context) error {
 	}
 	return errors.New("client was not allowed")
 }
+

@@ -1,12 +1,13 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package installers_test
 
 import (
-	"testing"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/installers"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/sizes"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"testing"
+	"time"
 )
 
 func TestNewUpgradeLimiter(t *testing.T) {

@@ -2,7 +2,6 @@ package models
 
 import (
 	"encoding/json"
-
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
 	_ "github.com/go-sql-driver/mysql"
@@ -100,7 +99,8 @@ func (this *HTTPFirewallRuleSetDAO) ComposeFirewallRuleSet(tx *dbs.Tx, setId int
 	config.Description = set.Description
 	config.Code = set.Code
 	config.Connector = set.Connector
-	config.IgnoreLocal = set.IgnoreLocal == 1
+	config.IgnoreLocal = set.IgnoreLocal
+	config.IgnoreSearchEngine = set.IgnoreSearchEngine
 
 	if IsNotNull(set.Rules) {
 		var ruleRefs = []*firewallconfigs.HTTPFirewallRuleRef{}
@@ -136,7 +136,7 @@ func (this *HTTPFirewallRuleSetDAO) ComposeFirewallRuleSet(tx *dbs.Tx, setId int
 				var ipListId = actionConfig.Options.GetInt64("ipListId")
 				if ipListId <= 0 { // default list id
 					if forNode {
-						actionConfig.Options["ipListId"] = firewallconfigs.GlobalListId
+						actionConfig.Options["ipListId"] = firewallconfigs.FindGlobalListIdWithType(actionConfig.Options.GetString("type"))
 					}
 					actionConfig.Options["ipListIsDeleted"] = false
 				} else {
@@ -165,6 +165,7 @@ func (this *HTTPFirewallRuleSetDAO) CreateOrUpdateSetFromConfig(tx *dbs.Tx, setC
 	op.Description = setConfig.Description
 	op.Connector = setConfig.Connector
 	op.IgnoreLocal = setConfig.IgnoreLocal
+	op.IgnoreSearchEngine = setConfig.IgnoreSearchEngine
 
 	if len(setConfig.Actions) == 0 {
 		op.Actions = "[]"

@@ -1,13 +1,12 @@
 package models_test
 
 import (
-	"testing"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
+	"time"
 )
 
 func TestNodeTaskDAO_CreateNodeTask(t *testing.T) {

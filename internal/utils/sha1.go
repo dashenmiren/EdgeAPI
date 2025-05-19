@@ -1,13 +1,14 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package utils
 
 import (
 	"crypto/sha1"
 	"fmt"
-	"sync/atomic"
-	"time"
-
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
+	"sync/atomic"
+	"time"
 )
 
 const sha1RandomPrefix = "SHA1_RANDOM"

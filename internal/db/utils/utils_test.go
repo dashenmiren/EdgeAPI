@@ -1,10 +1,11 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package dbutils_test
 
 import (
-	"testing"
-
 	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
 	"github.com/iwind/TeaGo/assert"
+	"testing"
 )
 
 func TestQuoteLike(t *testing.T) {

@@ -1,10 +1,11 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package utils_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/iwind/TeaGo/assert"
+	"testing"
 )
 
 func TestSplitStrings(t *testing.T) {
@@ -39,6 +40,7 @@ func TestLimitString(t *testing.T) {
 	a.IsTrue(utils.LimitString("中文测试", 1) == "")
 	a.IsTrue(utils.LimitString("中文测试", 3) == "中")
 }
+
 
 func TestSplitKeywordArgs(t *testing.T) {
 	{

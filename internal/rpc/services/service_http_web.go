@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/domainutils"
@@ -14,6 +12,7 @@ import (
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
+	"strings"
 )
 
 type HTTPWebService struct {
@@ -466,6 +465,31 @@ func (this *HTTPWebService) UpdateHTTPWebPages(ctx context.Context, req *pb.Upda
 	if err != nil {
 		return nil, err
 	}
+	return this.Success()
+}
+
+// UpdateHTTPWebGlobalPagesEnabled 更改系统自定义页面启用状态
+func (this *HTTPWebService) UpdateHTTPWebGlobalPagesEnabled(ctx context.Context, req *pb.UpdateHTTPWebGlobalPagesEnabledRequest) (*pb.RPCSuccess, error) {
+	// 校验请求
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+
+	if userId > 0 {
+		// 检查用户权限
+		err = models.SharedHTTPWebDAO.CheckUserWeb(nil, userId, req.HttpWebId)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var tx = this.NullTx()
+	err = models.SharedHTTPWebDAO.UpdateGlobalPagesEnabled(tx, req.HttpWebId, req.IsEnabled)
+	if err != nil {
+		return nil, err
+	}
+
 	return this.Success()
 }
 

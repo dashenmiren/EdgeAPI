@@ -1,13 +1,14 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package models_test
 
 import (
 	"encoding/json"
-	"testing"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/iwind/TeaGo/dbs"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"testing"
+	"time"
 )
 
 func TestNewHTTPAccessLogManager(t *testing.T) {

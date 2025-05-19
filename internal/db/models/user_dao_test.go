@@ -1,13 +1,12 @@
 package models_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/userconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestUserDAO_UpdateUserFeatures(t *testing.T) {

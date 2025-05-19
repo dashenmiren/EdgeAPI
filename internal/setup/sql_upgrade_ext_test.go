@@ -1,11 +1,11 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
 //go:build !plus
 
 package setup
 
 import (
-	"testing"
-
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestUpgradeSQLData_v0_5_6(t *testing.T) {
@@ -28,6 +28,7 @@ func TestUpgradeSQLData_v0_5_6(t *testing.T) {
 	t.Log("ok")
 }
 
+
 func TestUpgradeSQLData_v1_3_4(t *testing.T) {
 	db, err := dbs.NewInstanceFromConfig(&dbs.DBConfig{
 		Driver: "mysql",
@@ -47,3 +48,5 @@ func TestUpgradeSQLData_v1_3_4(t *testing.T) {
 	}
 	t.Log("ok")
 }
+
+

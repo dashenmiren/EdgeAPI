@@ -6,17 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
-	"net"
-	"os"
-	"os/exec"
-	"runtime"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/configs"
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
@@ -36,12 +25,22 @@ import (
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
-	stringutil "github.com/iwind/TeaGo/utils/string"
 	"github.com/iwind/gosock/pkg/gosock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
-	"gopkg.in/yaml.v3"
+	"log"
+	"net"
+	"os"
+	"os/exec"
+	"os/signal"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	// grpc decompression
 	_ "google.golang.org/grpc/encoding/gzip"
@@ -93,6 +92,9 @@ func (this *APINode) Start() {
 		return
 	}
 
+	// 监听信号
+	this.listenSignals()
+
 	// 启动IP库
 	this.setProgress("IP_LIBRARY", "开始初始化IP库")
 	remotelogs.Println("API_NODE", "initializing ip library ...")
@@ -135,6 +137,7 @@ func (this *APINode) Start() {
 	// 数据库通知启动
 	this.setProgress("DATABASE", "正在建立数据库模型")
 	logs.Println("[API_NODE]notify ready ...")
+	this.processTableNames()
 	dbs.NotifyReady()
 
 	// 设置时区
@@ -297,6 +300,22 @@ func (this *APINode) listenRPC(listener net.Listener, tlsConfig *tls.Config) err
 func (this *APINode) checkDB() error {
 	logs.Println("[API_NODE]checking database connection ...")
 
+	// generate .db.yaml
+	{
+		data, err := os.ReadFile(Tea.ConfigFile("db.yaml"))
+		if err != nil {
+			return errors.New("could not find database config file 'db.yaml' (at " + Tea.ConfigFile("db.yaml") + ")")
+		}
+
+		simpleConfig, err := configs.ParseSimpleDBConfig(data)
+		if err == nil && len(simpleConfig.Host) > 0 {
+			err = simpleConfig.GenerateOldConfig()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	// lookup mysqld_safe process
 	go dbutils.FindMySQLPathAndRemember()
 
@@ -353,12 +372,7 @@ func (this *APINode) autoUpgrade() error {
 	}
 
 	// 执行SQL
-	var config = &dbs.Config{}
-	configData, err := os.ReadFile(Tea.ConfigFile("db.yaml"))
-	if err != nil {
-		return fmt.Errorf("read database config file failed: %w", err)
-	}
-	err = yaml.Unmarshal(configData, config)
+	config, err := configs.LoadDBConfig()
 	if err != nil {
 		return fmt.Errorf("decode database config failed: %w", err)
 	}
@@ -377,7 +391,7 @@ func (this *APINode) autoUpgrade() error {
 	if one != nil {
 		// 如果是同样的版本，则直接认为是最新版本
 		var version = one.GetString("version")
-		if stringutil.VersionCompare(version, setup.ComposeSQLVersion()) >= 0 {
+		if setup.CompareVersion(version, setup.ComposeSQLVersion()) >= 0 {
 			return nil
 		}
 	}
@@ -452,6 +466,35 @@ func (this *APINode) setupDB() error {
 	_ = dbutils.SetGlobalVarMin(db, "thread_cache_size", 32)
 
 	return nil
+}
+
+// 处理表名兼容
+func (this *APINode) processTableNames() {
+	dbs.OnDAOInitError(func(dao dbs.DAOInterface, err error) error {
+		if err == nil {
+			return nil
+		}
+
+		if errors.Is(err, dbs.ErrTableNotFound) {
+			var instance = dao.Object().Instance
+			if instance == nil {
+				return err
+			}
+
+			// 查找完全小写的
+			var lowerTableName = strings.ToLower(dao.Object().Table)
+			lowerTable, _ := instance.FindTable(lowerTableName)
+			if lowerTable != nil {
+				_, err = instance.Exec("RENAME TABLE `" + lowerTableName + "` TO `" + dao.Object().Table + "`")
+				if err == nil {
+					logs.Println("[API_NODE]rename table '" + lowerTableName + "' to '" + dao.Object().Table + "'")
+					return dao.Object().Init()
+				}
+			}
+		}
+
+		return err
+	})
 }
 
 // 启动端口
@@ -921,4 +964,17 @@ func (this *APINode) setupTimeZone() {
 			time.Local = location
 		}
 	}
+}
+
+// 监听一些信号
+func (this *APINode) listenSignals() {
+	var queue = make(chan os.Signal, 8)
+	signal.Notify(queue, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL, syscall.SIGQUIT)
+	goman.New(func() {
+		for range queue {
+			events.Notify(events.EventQuit)
+			os.Exit(0)
+			return
+		}
+	})
 }

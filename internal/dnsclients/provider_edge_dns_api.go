@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package dnsclients
 
 import (
@@ -6,17 +8,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"regexp"
-	"strings"
-	"time"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/edgeapi"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
+	"io"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
 )
 
 var edgeDNSHTTPClient = &http.Client{

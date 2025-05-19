@@ -2,9 +2,6 @@ package acme
 
 import (
 	"fmt"
-	"io"
-	"log"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/go-acme/lego/v4/certcrypto"
@@ -13,6 +10,8 @@ import (
 	acmelog "github.com/go-acme/lego/v4/log"
 	"github.com/go-acme/lego/v4/registration"
 	"github.com/iwind/TeaGo/Tea"
+	"io"
+	"log"
 )
 
 type Request struct {

@@ -1,16 +1,17 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package models
 
 import (
 	"fmt"
-	"regexp"
-	"sort"
-	"strings"
-	"sync"
-
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/types"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
 )
 
 // 访问日志的两个表格形式

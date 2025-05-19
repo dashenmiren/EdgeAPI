@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package dnsclients
 
 import (
@@ -5,6 +7,12 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/cloudflare"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/iwind/TeaGo/maps"
+	"github.com/iwind/TeaGo/types"
 	"io"
 	"net/http"
 	"net/url"
@@ -12,13 +20,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/cloudflare"
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/iwind/TeaGo/maps"
-	"github.com/iwind/TeaGo/types"
 )
 
 const CloudFlareAPIEndpoint = "https://api.cloudflare.com/client/v4/"

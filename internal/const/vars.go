@@ -1,14 +1,15 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package teaconst
 
 import (
 	"crypto/sha1"
 	"fmt"
+	"github.com/iwind/TeaGo/rands"
+	"github.com/iwind/TeaGo/types"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/iwind/TeaGo/rands"
-	"github.com/iwind/TeaGo/types"
 )
 
 var (

@@ -4,11 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
 	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
@@ -31,6 +26,10 @@ import (
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
@@ -1106,6 +1105,11 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64, dataMap *shared
 			continue
 		}
 
+		// 集群密钥
+		if len(config.ClusterSecret) == 0 {
+			config.ClusterSecret = nodeCluster.Secret
+		}
+
 		// 所有节点IP地址
 		nodeIPAddresses, err := SharedNodeIPAddressDAO.FindAllAccessibleIPAddressesWithClusterId(tx, nodeconfigs.NodeRoleNode, clusterId, cacheMap)
 		if err != nil {
@@ -1245,10 +1249,13 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64, dataMap *shared
 			}
 		}
 
-		// 自动安装nftables
+		// 自动安装nftables等集群配置
 		if clusterIndex == 0 {
 			config.AutoInstallNftables = nodeCluster.AutoInstallNftables
 			config.AutoSystemTuning = nodeCluster.AutoSystemTuning
+			config.AutoTrimDisks = nodeCluster.AutoTrimDisks
+			config.MaxConcurrentReads = int(nodeCluster.MaxConcurrentReads)
+			config.MaxConcurrentWrites = int(nodeCluster.MaxConcurrentWrites)
 		}
 
 		// 安全设置

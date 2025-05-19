@@ -2,9 +2,6 @@ package regions
 
 import (
 	"encoding/json"
-	"sort"
-	"strconv"
-
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
 	_ "github.com/go-sql-driver/mysql"
@@ -12,6 +9,8 @@ import (
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
+	"sort"
+	"strconv"
 )
 
 const (

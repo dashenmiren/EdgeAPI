@@ -1,12 +1,13 @@
+// Copyright 2024 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package models_test
 
 import (
 	"errors"
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/iwind/TeaGo/assert"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestIsMySQLError(t *testing.T) {

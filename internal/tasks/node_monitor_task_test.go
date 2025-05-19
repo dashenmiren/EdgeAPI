@@ -1,12 +1,11 @@
 package tasks_test
 
 import (
-	"testing"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
+	"time"
 )
 
 func TestNodeMonitorTask_loop(t *testing.T) {

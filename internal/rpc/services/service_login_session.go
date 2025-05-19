@@ -1,9 +1,10 @@
+// Copyright 2023 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package services
 
 import (
 	"context"
 	"errors"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
@@ -82,4 +83,32 @@ func (this *LoginSessionService) FindLoginSession(ctx context.Context, req *pb.F
 			ValuesJSON: session.Values,
 		},
 	}, nil
+}
+
+// ClearOldLoginSessions 清理老的SESSION
+func (this *LoginSessionService) ClearOldLoginSessions(ctx context.Context, req *pb.ClearOldLoginSessionsRequest) (*pb.RPCSuccess, error) {
+	_, _, err := this.ValidateAdminAndUser(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(req.Sid) == 0 {
+		return nil, errors.New("'token' should not be empty")
+	}
+
+	var tx = this.NullTx()
+	session, err := models.SharedLoginSessionDAO.FindSession(tx, req.Sid)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil || !session.IsAvailable() {
+		return nil, errors.New("invalid sid")
+	}
+
+	err = models.SharedLoginSessionDAO.ClearOldSessions(tx, int64(session.AdminId), int64(session.UserId), req.Sid, req.Ip)
+	if err != nil {
+		return nil, err
+	}
+
+	return this.Success()
 }

@@ -1,10 +1,10 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
 //go:build !plus
 
 package models
 
 import (
 	"errors"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"

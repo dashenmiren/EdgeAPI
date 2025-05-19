@@ -2,16 +2,15 @@ package dnsclients_test
 
 import (
 	"encoding/json"
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"
+	"testing"
 )
 
-const DNSPodTestDomain = "google.com"
+const DNSPodTestDomain = "goedge.cloud"
 
 func TestDNSPodProvider_GetDomains(t *testing.T) {
 	provider, _, err := testDNSPodProvider()

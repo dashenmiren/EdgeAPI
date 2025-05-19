@@ -2,8 +2,6 @@ package models
 
 import (
 	"encoding/base64"
-	"strings"
-
 	"github.com/dashenmiren/EdgeAPI/internal/encrypt"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
@@ -11,6 +9,7 @@ import (
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
+	"strings"
 )
 
 const (

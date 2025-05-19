@@ -2,7 +2,6 @@ package dns
 
 import (
 	"encoding/json"
-
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 )
 

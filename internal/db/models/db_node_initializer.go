@@ -2,10 +2,6 @@ package models
 
 import (
 	"fmt"
-	"strconv"
-	"sync"
-	"time"
-
 	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
@@ -14,6 +10,9 @@ import (
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/rands"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"strconv"
+	"sync"
+	"time"
 )
 
 var accessLogDBMapping = map[int64]*dbs.DB{} // dbNodeId => DB

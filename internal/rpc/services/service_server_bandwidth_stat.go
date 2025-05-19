@@ -1,27 +1,57 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"strings"
-	"sync"
-	"time"
-
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
+	"github.com/dashenmiren/EdgeAPI/internal/events"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/regexputils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
+	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"os"
+	"strings"
+	"sync"
+	"time"
 )
 
 var serverBandwidthStatsMap = map[string]*pb.ServerBandwidthStat{} // server key => bandwidth
 var serverBandwidthStatsLocker = &sync.Mutex{}
 
 func init() {
+	// 数据缓存
+	if teaconst.IsMain {
+		var cacheFile = Tea.Root + "/data/server_bandwidth_stats.cache"
+
+		{
+			data, err := os.ReadFile(cacheFile)
+			if err == nil {
+				_ = os.Remove(cacheFile)
+				serverBandwidthStatsLocker.Lock()
+				_ = json.Unmarshal(data, &serverBandwidthStatsMap)
+				serverBandwidthStatsLocker.Unlock()
+			}
+		}
+
+		events.On(events.EventQuit, func() {
+			serverBandwidthStatsMapJSON, err := json.Marshal(serverBandwidthStatsMap)
+			if err == nil {
+				_ = os.WriteFile(cacheFile, serverBandwidthStatsMapJSON, 0666)
+			}
+		})
+	}
+
+	// 定时处理数据
 	var ticker = time.NewTicker(1 * time.Minute)
 	var useTx = true
 
@@ -65,7 +95,7 @@ func init() {
 						// 更新网站的带宽峰值
 						if stat.ServerId > 0 {
 							// 更新带宽统计
-							err = models.SharedServerBandwidthStatDAO.UpdateServerBandwidth(tx, stat.UserId, stat.ServerId, stat.NodeRegionId, stat.UserPlanId, stat.Day, stat.TimeAt, stat.Bytes, stat.TotalBytes, stat.CachedBytes, stat.AttackBytes, stat.CountRequests, stat.CountCachedRequests, stat.CountAttackRequests)
+							err = models.SharedServerBandwidthStatDAO.UpdateServerBandwidth(tx, stat.UserId, stat.ServerId, stat.NodeRegionId, stat.UserPlanId, stat.Day, stat.TimeAt, stat.Bytes, stat.TotalBytes, stat.CachedBytes, stat.AttackBytes, stat.CountRequests, stat.CountCachedRequests, stat.CountAttackRequests, stat.CountIPs)
 							if err != nil {
 								remotelogs.Error("ServerBandwidthStatService", "dump bandwidth stats failed: "+err.Error())
 							}
@@ -86,6 +116,9 @@ func init() {
 
 								// 分时统计
 								err = models.SharedUserPlanBandwidthStatDAO.UpdateUserPlanBandwidth(tx, stat.UserId, stat.UserPlanId, stat.NodeRegionId, stat.Day, stat.TimeAt, stat.Bytes, stat.TotalBytes, stat.CachedBytes, stat.AttackBytes, stat.CountRequests, stat.CountCachedRequests, stat.CountAttackRequests, stat.CountWebsocketConnections)
+								if err != nil {
+									remotelogs.Error("SharedUserPlanBandwidthStatDAO", "UpdateUserPlanBandwidth: " + err.Error())
+								}
 							}
 						}
 
@@ -93,7 +126,15 @@ func init() {
 						if stat.UserId > 0 {
 							err = models.SharedUserBandwidthStatDAO.UpdateUserBandwidth(tx, stat.UserId, stat.NodeRegionId, stat.Day, stat.TimeAt, stat.Bytes, stat.TotalBytes, stat.CachedBytes, stat.AttackBytes, stat.CountRequests, stat.CountCachedRequests, stat.CountAttackRequests)
 							if err != nil {
-								remotelogs.Error("SharedUserBandwidthStatDAO", "dump bandwidth stats failed: "+err.Error())
+								remotelogs.Error("SharedUserBandwidthStatDAO", "UpdateUserBandwidth: "+err.Error())
+							}
+						}
+
+						// 更新整体的独立IP统计
+						if stat.CountIPs > 0 {
+							err = stats.SharedTrafficDailyStatDAO.IncreaseIPs(tx, stat.Day, stat.CountIPs)
+							if err != nil {
+								remotelogs.Error("SharedTrafficDailyStatDAO", "IncreaseIPs: "+err.Error())
 							}
 						}
 					}
@@ -146,6 +187,7 @@ func (this *ServerBandwidthStatService) UploadServerBandwidthStats(ctx context.C
 			oldStat.CountCachedRequests += stat.CountCachedRequests
 			oldStat.CountAttackRequests += stat.CountAttackRequests
 			oldStat.CountWebsocketConnections += stat.CountWebsocketConnections
+			oldStat.CountIPs += stat.CountIPs
 		} else {
 			serverBandwidthStatsMap[key] = &pb.ServerBandwidthStat{
 				Id:                        0,
@@ -163,6 +205,7 @@ func (this *ServerBandwidthStatService) UploadServerBandwidthStats(ctx context.C
 				CountAttackRequests:       stat.CountAttackRequests,
 				CountWebsocketConnections: stat.CountWebsocketConnections,
 				UserPlanId:                stat.UserPlanId,
+				CountIPs:                  stat.CountIPs,
 			}
 		}
 		serverBandwidthStatsLocker.Unlock()

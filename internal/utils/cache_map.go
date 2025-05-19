@@ -1,9 +1,10 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package utils
 
 import (
-	"sync"
-
 	"github.com/iwind/TeaGo/maps"
+	"sync"
 )
 
 type CacheMap struct {

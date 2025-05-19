@@ -2,10 +2,6 @@ package regions
 
 import (
 	"encoding/json"
-	"sort"
-	"strconv"
-	"strings"
-
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/regionconfigs"
@@ -15,6 +11,9 @@ import (
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 	"github.com/mozillazg/go-pinyin"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 const (

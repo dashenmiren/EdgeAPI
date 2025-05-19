@@ -1,11 +1,12 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package tasks_test
 
 import (
-	"testing"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
+	"time"
 )
 
 func TestMonitorItemValueTask_Loop(t *testing.T) {

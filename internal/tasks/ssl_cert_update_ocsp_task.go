@@ -1,3 +1,5 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package tasks
 
 import (
@@ -7,10 +9,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"time"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
@@ -18,6 +16,9 @@ import (
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/iwind/TeaGo/dbs"
 	"golang.org/x/crypto/ocsp"
+	"io"
+	"net/http"
+	"time"
 )
 
 func init() {

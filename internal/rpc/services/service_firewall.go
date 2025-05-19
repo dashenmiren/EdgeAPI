@@ -1,11 +1,9 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package services
 
 import (
 	"context"
-	"sort"
-	"strconv"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/regions"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
@@ -14,6 +12,9 @@ import (
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"sort"
+	"strconv"
+	"time"
 )
 
 // FirewallService 防火墙全局服务

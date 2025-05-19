@@ -1,8 +1,6 @@
 package stats
 
 import (
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
@@ -14,6 +12,7 @@ import (
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/rands"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"time"
 )
 
 type NodeClusterTrafficDailyStatDAO dbs.DAO

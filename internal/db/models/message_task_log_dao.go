@@ -1,8 +1,6 @@
 package models
 
 import (
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	_ "github.com/go-sql-driver/mysql"
@@ -10,6 +8,7 @@ import (
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/rands"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"time"
 )
 
 type MessageTaskLogDAO dbs.DAO

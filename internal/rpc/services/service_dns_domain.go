@@ -3,8 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"net"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns/dnsutils"
@@ -12,14 +10,15 @@ import (
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
-	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
 	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/iputils"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/maps"
+	"net"
 )
 
 // DNSDomainService DNS域名相关服务
@@ -548,7 +547,7 @@ func (this *DNSDomainService) findClusterDNSChanges(cluster *models.NodeCluster,
 				record, ok := nodeRecordMapping[key]
 				if !ok {
 					var recordType = dnstypes.RecordTypeA
-					if utils.IsIPv6(ip) {
+					if iputils.IsIPv6(ip) {
 						recordType = dnstypes.RecordTypeAAAA
 					}
 

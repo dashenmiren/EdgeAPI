@@ -1,11 +1,10 @@
 package models
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
+	"testing"
 )
 
 func TestNodeIPAddressDAO_FindFirstNodeAccessIPAddress(t *testing.T) {

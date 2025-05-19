@@ -3,15 +3,14 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"net"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/iplibrary"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ipconfigs"
 	"github.com/iwind/TeaGo/lists"
+	"net"
 )
 
 // HTTPFirewallPolicyService HTTP防火墙（WAF）相关服务
@@ -67,9 +66,9 @@ func (this *HTTPFirewallPolicyService) CreateHTTPFirewallPolicy(ctx context.Cont
 	}
 
 	// 初始化
-	inboundConfig := &firewallconfigs.HTTPFirewallInboundConfig{IsOn: true}
-	outboundConfig := &firewallconfigs.HTTPFirewallOutboundConfig{IsOn: true}
-	templatePolicy := firewallconfigs.HTTPFirewallTemplate()
+	var inboundConfig = &firewallconfigs.HTTPFirewallInboundConfig{IsOn: true}
+	var outboundConfig = &firewallconfigs.HTTPFirewallOutboundConfig{IsOn: true}
+	var templatePolicy = firewallconfigs.HTTPFirewallTemplate()
 	if templatePolicy.Inbound != nil {
 		for _, group := range templatePolicy.Inbound.Groups {
 			isOn := lists.ContainsString(req.HttpFirewallGroupCodes, group.Code)
@@ -111,7 +110,7 @@ func (this *HTTPFirewallPolicyService) CreateHTTPFirewallPolicy(ctx context.Cont
 		return nil, err
 	}
 
-	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicyInboundAndOutbound(tx, policyId, inboundConfigJSON, outboundConfigJSON, false)
+	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicyInboundAndOutbound(tx, policyId, userId, req.ServerId, inboundConfigJSON, outboundConfigJSON, false)
 	if err != nil {
 		return nil, err
 	}
@@ -127,26 +126,33 @@ func (this *HTTPFirewallPolicyService) CreateEmptyHTTPFirewallPolicy(ctx context
 		return nil, err
 	}
 
+	var tx = this.NullTx()
+
+	var sourceUserId = userId
 	if userId > 0 {
 		if req.ServerId > 0 {
-			err = models.SharedServerDAO.CheckUserServer(nil, userId, req.ServerId)
+			err = models.SharedServerDAO.CheckUserServer(tx, userId, req.ServerId)
 			if err != nil {
 				return nil, err
 			}
 		}
+	} else if req.ServerId > 0 {
+		sourceUserId, err = models.SharedServerDAO.FindServerUserId(tx, req.ServerId)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	var tx = this.NullTx()
-
-	policyId, err := models.SharedHTTPFirewallPolicyDAO.CreateFirewallPolicy(tx, userId, req.ServerGroupId, req.ServerId, req.IsOn, req.Name, req.Description, nil, nil)
+	policyId, err := models.SharedHTTPFirewallPolicyDAO.CreateFirewallPolicy(tx, sourceUserId, req.ServerGroupId, req.ServerId, req.IsOn, req.Name, req.Description, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// 初始化
-	inboundConfig := &firewallconfigs.HTTPFirewallInboundConfig{IsOn: true}
-	outboundConfig := &firewallconfigs.HTTPFirewallOutboundConfig{IsOn: true}
+	var inboundConfig = &firewallconfigs.HTTPFirewallInboundConfig{IsOn: true}
+	var outboundConfig = &firewallconfigs.HTTPFirewallOutboundConfig{IsOn: true}
 
+	// 准备保存
 	inboundConfigJSON, err := json.Marshal(inboundConfig)
 	if err != nil {
 		return nil, err
@@ -157,7 +163,7 @@ func (this *HTTPFirewallPolicyService) CreateEmptyHTTPFirewallPolicy(ctx context
 		return nil, err
 	}
 
-	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicyInboundAndOutbound(tx, policyId, inboundConfigJSON, outboundConfigJSON, false)
+	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicyInboundAndOutbound(tx, policyId, sourceUserId, req.ServerId, inboundConfigJSON, outboundConfigJSON, false)
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +312,7 @@ func (this *HTTPFirewallPolicyService) UpdateHTTPFirewallPolicy(ctx context.Cont
 		req.MaxRequestBodySize = 0
 	}
 
-	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicy(tx, req.HttpFirewallPolicyId, req.IsOn, req.Name, req.Description, inboundConfigJSON, outboundConfigJSON, req.BlockOptionsJSON, req.PageOptionsJSON, req.CaptchaOptionsJSON, req.Mode, req.UseLocalFirewall, synFloodConfig, logConfig, req.MaxRequestBodySize, req.DenyCountryHTML, req.DenyProvinceHTML)
+	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicy(tx, req.HttpFirewallPolicyId, req.IsOn, req.Name, req.Description, inboundConfigJSON, outboundConfigJSON, req.BlockOptionsJSON, req.PageOptionsJSON, req.CaptchaOptionsJSON, req.JsCookieOptionsJSON, req.Mode, req.UseLocalFirewall, synFloodConfig, logConfig, req.MaxRequestBodySize, req.DenyCountryHTML, req.DenyProvinceHTML)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +337,7 @@ func (this *HTTPFirewallPolicyService) UpdateHTTPFirewallPolicyGroups(ctx contex
 
 	var tx = this.NullTx()
 
-	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicyInboundAndOutbound(tx, req.HttpFirewallPolicyId, req.InboundJSON, req.OutboundJSON, true)
+	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicyInboundAndOutbound(tx, req.HttpFirewallPolicyId, userId, 0, req.InboundJSON, req.OutboundJSON, true)
 	if err != nil {
 		return nil, err
 	}
@@ -655,7 +661,7 @@ func (this *HTTPFirewallPolicyService) ImportHTTPFirewallPolicy(ctx context.Cont
 		return nil, err
 	}
 
-	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicyInboundAndOutbound(tx, req.HttpFirewallPolicyId, inboundJSON, outboundJSON, true)
+	err = models.SharedHTTPFirewallPolicyDAO.UpdateFirewallPolicyInboundAndOutbound(tx, req.HttpFirewallPolicyId, 0, 0, inboundJSON, outboundJSON, true)
 	if err != nil {
 		return nil, err
 	}
@@ -665,22 +671,33 @@ func (this *HTTPFirewallPolicyService) ImportHTTPFirewallPolicy(ctx context.Cont
 
 // CheckHTTPFirewallPolicyIPStatus 检查IP状态
 func (this *HTTPFirewallPolicyService) CheckHTTPFirewallPolicyIPStatus(ctx context.Context, req *pb.CheckHTTPFirewallPolicyIPStatusRequest) (*pb.CheckHTTPFirewallPolicyIPStatusResponse, error) {
-	_, err := this.ValidateAdmin(ctx)
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
 	if err != nil {
 		return nil, err
 	}
 
+	var tx = this.NullTx()
+
+	// 检查权限
+	if req.HttpFirewallPolicyId <= 0 {
+		return nil, errors.New("invalid 'httpFirewallPolicyId'")
+	}
+	if userId > 0 {
+		err = models.SharedHTTPFirewallPolicyDAO.CheckUserFirewallPolicy(tx, userId, req.HttpFirewallPolicyId)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// 校验IP
-	ip := net.ParseIP(req.Ip)
+	var ip = net.ParseIP(req.Ip)
 	if len(ip) == 0 {
 		return &pb.CheckHTTPFirewallPolicyIPStatusResponse{
 			IsOk:  false,
 			Error: "请输入正确的IP",
 		}, nil
 	}
-	ipLong := utils.IP2Long(req.Ip)
 
-	var tx = this.NullTx()
 	firewallPolicy, err := models.SharedHTTPFirewallPolicyDAO.ComposeFirewallPolicy(tx, req.HttpFirewallPolicyId, false, nil)
 	if err != nil {
 		return nil, err
@@ -714,7 +731,7 @@ func (this *HTTPFirewallPolicyService) CheckHTTPFirewallPolicyIPStatus(ctx conte
 		}
 
 		for _, listId := range listIds {
-			item, err := models.SharedIPItemDAO.FindEnabledItemContainsIP(tx, listId, ipLong)
+			item, err := models.SharedIPItemDAO.FindEnabledItemContainsIP(tx, listId, req.Ip)
 			if err != nil {
 				return nil, err
 			}
@@ -731,15 +748,17 @@ func (this *HTTPFirewallPolicyService) CheckHTTPFirewallPolicyIPStatus(ctx conte
 					Error:     "",
 					IsFound:   true,
 					IsAllowed: true,
-					IpList:    &pb.IPList{Name: listName, Id: listId},
+					IpList:    &pb.IPList{Name: listName, Id: listId, Type: ipconfigs.IPListTypeWhite},
 					IpItem: &pb.IPItem{
 						Id:         int64(item.Id),
+						Value:      item.ComposeValue(),
 						IpFrom:     item.IpFrom,
 						IpTo:       item.IpTo,
 						ExpiredAt:  int64(item.ExpiredAt),
 						Reason:     item.Reason,
 						Type:       item.Type,
 						EventLevel: item.EventLevel,
+						ListType:   ipconfigs.IPListTypeWhite,
 					},
 					RegionCountry:  nil,
 					RegionProvince: nil,
@@ -769,7 +788,7 @@ func (this *HTTPFirewallPolicyService) CheckHTTPFirewallPolicyIPStatus(ctx conte
 		}
 
 		for _, listId := range listIds {
-			item, err := models.SharedIPItemDAO.FindEnabledItemContainsIP(tx, listId, ipLong)
+			item, err := models.SharedIPItemDAO.FindEnabledItemContainsIP(tx, listId, req.Ip)
 			if err != nil {
 				return nil, err
 			}
@@ -786,15 +805,74 @@ func (this *HTTPFirewallPolicyService) CheckHTTPFirewallPolicyIPStatus(ctx conte
 					Error:     "",
 					IsFound:   true,
 					IsAllowed: false,
-					IpList:    &pb.IPList{Name: listName, Id: listId},
+					IpList:    &pb.IPList{Name: listName, Id: listId, Type: ipconfigs.IPListTypeBlack},
 					IpItem: &pb.IPItem{
 						Id:         int64(item.Id),
+						Value:      item.ComposeValue(),
 						IpFrom:     item.IpFrom,
 						IpTo:       item.IpTo,
 						ExpiredAt:  int64(item.ExpiredAt),
 						Reason:     item.Reason,
 						Type:       item.Type,
 						EventLevel: item.EventLevel,
+						ListType:   ipconfigs.IPListTypeBlack,
+					},
+					RegionCountry:  nil,
+					RegionProvince: nil,
+				}, nil
+			}
+		}
+	}
+
+	// 检查灰名单
+	if firewallPolicy.Inbound != nil &&
+		firewallPolicy.Inbound.IsOn &&
+		firewallPolicy.Inbound.GreyListRef != nil &&
+		firewallPolicy.Inbound.GreyListRef.IsOn &&
+		firewallPolicy.Inbound.GreyListRef.ListId > 0 {
+		var listIds = []int64{}
+		if firewallPolicy.Inbound.GreyListRef.ListId > 0 {
+			listIds = append(listIds, firewallPolicy.Inbound.GreyListRef.ListId)
+		}
+		if len(firewallPolicy.Inbound.PublicGreyListRefs) > 0 {
+			for _, ref := range firewallPolicy.Inbound.PublicGreyListRefs {
+				if !ref.IsOn {
+					continue
+				}
+
+				listIds = append(listIds, ref.ListId)
+			}
+		}
+
+		for _, listId := range listIds {
+			item, err := models.SharedIPItemDAO.FindEnabledItemContainsIP(tx, listId, req.Ip)
+			if err != nil {
+				return nil, err
+			}
+			if item != nil {
+				listName, err := models.SharedIPListDAO.FindIPListName(tx, listId)
+				if err != nil {
+					return nil, err
+				}
+				if len(listName) == 0 {
+					listName = "灰名单"
+				}
+				return &pb.CheckHTTPFirewallPolicyIPStatusResponse{
+					IsOk:      true,
+					Error:     "",
+					IsFound:   true,
+					IsAllowed: true,
+					IpList:    &pb.IPList{Name: listName, Id: listId, Type: ipconfigs.IPListTypeGrey},
+					IpItem: &pb.IPItem{
+						Id:         int64(item.Id),
+						Value:      item.ComposeValue(),
+						IpFrom:     item.IpFrom,
+						IpTo:       item.IpTo,
+						ExpiredAt:  int64(item.ExpiredAt),
+						Reason:     item.Reason,
+						Type:       item.Type,
+						EventLevel: item.EventLevel,
+						ListType:   ipconfigs.IPListTypeGrey,
 					},
 					RegionCountry:  nil,
 					RegionProvince: nil,

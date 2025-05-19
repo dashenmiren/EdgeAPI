@@ -2,9 +2,6 @@ package models_test
 
 import (
 	"fmt"
-	"testing"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	_ "github.com/go-sql-driver/mysql"
@@ -12,6 +9,8 @@ import (
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/rands"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"testing"
+	"time"
 )
 
 func TestServerDailyStatDAO_SaveStats(t *testing.T) {

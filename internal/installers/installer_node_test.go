@@ -1,9 +1,8 @@
 package installers
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"testing"
 )
 
 func TestNodeInstaller_Install(t *testing.T) {

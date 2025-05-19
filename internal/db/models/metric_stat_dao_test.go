@@ -1,9 +1,6 @@
 package models_test
 
 import (
-	"testing"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
@@ -11,6 +8,8 @@ import (
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"testing"
+	"time"
 )
 
 func TestNewMetricStatDAO_InsertMany(t *testing.T) {
@@ -42,7 +41,7 @@ func TestMetricStatDAO_DeleteNodeItemStats(t *testing.T) {
 	defer func() {
 		t.Log(time.Since(before).Seconds()*1000, "ms")
 	}()
-	err := dao.DeleteNodeItemStats(nil, 1, 0, 1, timeutil.Format("Ymd"))
+	err := dao.DeleteNodeItemStats(nil, 1, 0, 1, timeutil.Format("Ymd"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,9 +2,6 @@ package models
 
 import (
 	"encoding/json"
-	"sort"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	_ "github.com/go-sql-driver/mysql"
@@ -13,6 +10,8 @@ import (
 	"github.com/iwind/TeaGo/types"
 	stringutil "github.com/iwind/TeaGo/utils/string"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"sort"
+	"time"
 )
 
 type UpdatingServerListDAO dbs.DAO

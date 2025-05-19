@@ -1,8 +1,6 @@
 package stats
 
 import (
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
@@ -14,6 +12,7 @@ import (
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/rands"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"time"
 )
 
 type TrafficDailyStatDAO dbs.DAO
@@ -84,6 +83,22 @@ func (this *TrafficDailyStatDAO) IncreaseDailyStat(tx *dbs.Tx, day string, bytes
 		return err
 	}
 	return nil
+}
+
+// IncreaseIPs 增加独立IP统计数据
+func (this *TrafficDailyStatDAO) IncreaseIPs(tx *dbs.Tx, day string, countIPs int64) error {
+	if len(day) != 8 {
+		return errors.New("invalid day '" + day + "'")
+	}
+
+	return this.Query(tx).
+		Param("countIPs", countIPs).
+		InsertOrUpdateQuickly(maps.Map{
+			"day":      day,
+			"countIPs": countIPs,
+		}, maps.Map{
+			"countIPs": dbs.SQL("countIPs+:countIPs"),
+		})
 }
 
 // FindDailyStats 获取日期之间统计

@@ -1,11 +1,12 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package dnsclients_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"testing"
 )
 
 func TestBaseProvider_WrapError(t *testing.T) {

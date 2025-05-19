@@ -1,10 +1,11 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package sizes_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/utils/sizes"
 	"github.com/iwind/TeaGo/assert"
+	"testing"
 )
 
 func TestSizes(t *testing.T) {

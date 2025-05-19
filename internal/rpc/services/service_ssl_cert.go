@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/acme"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"

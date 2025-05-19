@@ -1,9 +1,10 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package services
 
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"

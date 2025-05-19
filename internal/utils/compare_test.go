@@ -1,9 +1,10 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package utils_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"testing"
 )
 
 func TestEqualConfig(t *testing.T) {

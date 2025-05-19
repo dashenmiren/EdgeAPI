@@ -1,12 +1,13 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package dbutils
 
 import (
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/dbs"
 	"golang.org/x/sys/unix"
+	"time"
 )
 
 const minFreeSpaceGB = 3

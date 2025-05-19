@@ -4,11 +4,10 @@
 package tasks_test
 
 import (
-	"testing"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestHealthCheckExecutor_Run(t *testing.T) {

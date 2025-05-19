@@ -1,12 +1,11 @@
 package models_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestIPLibraryFileDAO_GenerateIPLibrary(t *testing.T) {

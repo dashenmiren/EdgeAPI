@@ -1,14 +1,15 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package nodes
 
 import (
-	"reflect"
-	"strings"
-
 	"github.com/dashenmiren/EdgeAPI/internal/rpc/services"
 	"github.com/dashenmiren/EdgeAPI/internal/rpc/services/clients"
 	"github.com/dashenmiren/EdgeAPI/internal/rpc/services/users"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"google.golang.org/grpc"
+	"reflect"
+	"strings"
 )
 
 // 注册服务
@@ -331,6 +332,11 @@ func (this *APINode) registerServices(server *grpc.Server) {
 	{
 		var instance = this.serviceInstance(&services.LoginSessionService{}).(*services.LoginSessionService)
 		pb.RegisterLoginSessionServiceServer(server, instance)
+		this.rest(instance)
+	}
+	{
+		var instance = this.serviceInstance(&services.LoginTicketService{}).(*services.LoginTicketService)
+		pb.RegisterLoginTicketServiceServer(server, instance)
 		this.rest(instance)
 	}
 	{

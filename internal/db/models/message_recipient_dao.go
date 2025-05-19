@@ -2,8 +2,6 @@ package models
 
 import (
 	"encoding/json"
-	"regexp"
-
 	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
@@ -12,6 +10,7 @@ import (
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
+	"regexp"
 )
 
 const (

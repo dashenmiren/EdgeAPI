@@ -4,9 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"testing"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
@@ -17,6 +14,8 @@ import (
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"testing"
+	"time"
 )
 
 func TestServerDAO_CreateManyServers(t *testing.T) {
@@ -35,7 +34,7 @@ func TestServerDAO_CreateManyServers(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		serverId, err := dao.CreateServer(tx, 0, 0, serverconfigs.ServerTypeHTTPProxy, "TEST"+types.String(i), "", serverNamesJSON, false, nil, nil, nil, nil, nil, nil, nil, 0, nil, 1, nil, nil, nil, 0)
+		serverId, err := dao.CreateServer(tx, 0, 0, serverconfigs.ServerTypeHTTPProxy, "TEST"+types.String(i), "", serverNamesJSON, false, nil, nil, nil, nil, nil, nil, 0, nil, 0, nil, nil, nil, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

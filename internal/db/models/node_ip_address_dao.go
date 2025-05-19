@@ -3,7 +3,6 @@ package models
 import (
 	"encoding/json"
 	"errors"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
 	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"

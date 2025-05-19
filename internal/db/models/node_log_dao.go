@@ -1,10 +1,6 @@
 package models
 
 import (
-	"strconv"
-	"strings"
-	"time"
-
 	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
@@ -17,6 +13,9 @@ import (
 	"github.com/iwind/TeaGo/types"
 	stringutil "github.com/iwind/TeaGo/utils/string"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type NodeLogDAO dbs.DAO

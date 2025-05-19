@@ -2,7 +2,6 @@ package models
 
 import (
 	"encoding/json"
-
 	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
@@ -166,16 +165,15 @@ func (this *HTTPCachePolicyDAO) CreateDefaultCachePolicy(tx *dbs.Tx, name string
 		Count: 256,
 		Unit:  shared.SizeCapacityUnitMB,
 	}
-	if err != nil {
-		return 0, err
-	}
 	maxSizeJSON, err := maxSize.AsJSON()
 	if err != nil {
 		return 0, err
 	}
 
 	var storageOptions = &serverconfigs.HTTPFileCacheStorage{
-		Dir: "/opt/cache",
+		Dir:                            "/opt/cache",
+		EnableMMAP:                     false,
+		EnableIncompletePartialContent: true,
 		MemoryPolicy: &serverconfigs.HTTPCachePolicy{
 			Capacity: &shared.SizeCapacity{
 				Count: 1,

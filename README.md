@@ -1,1 +1,1 @@
-GoCDN API节点源码
+GoEdge API节点源码

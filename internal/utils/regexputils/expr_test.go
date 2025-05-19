@@ -1,10 +1,11 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package regexputils_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/utils/regexputils"
 	"github.com/iwind/TeaGo/assert"
+	"testing"
 )
 
 func TestExpr(t *testing.T) {

@@ -1,11 +1,6 @@
 package stats
 
 import (
-	"sort"
-	"strings"
-	"sync"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
@@ -17,6 +12,10 @@ import (
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"sort"
+	"strings"
+	"sync"
+	"time"
 )
 
 type ServerDomainHourlyStatDAO dbs.DAO

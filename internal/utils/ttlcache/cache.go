@@ -1,9 +1,8 @@
 package ttlcache
 
 import (
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"time"
 )
 
 var SharedCache = NewCache()

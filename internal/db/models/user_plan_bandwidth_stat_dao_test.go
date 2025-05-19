@@ -1,13 +1,12 @@
 package models_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"testing"
 )
 
 func TestUserPlanBandwidthStatDAO_FindMonthlyPercentile(t *testing.T) {

@@ -1,9 +1,8 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package tasks
 
 import (
-	"sync"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
@@ -14,6 +13,8 @@ import (
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"sync"
+	"time"
 )
 
 var SharedCacheTaskManager = NewCacheTaskManager()

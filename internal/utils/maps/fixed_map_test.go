@@ -1,10 +1,11 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package maputils_test
 
 import (
-	"testing"
-
 	maputils "github.com/dashenmiren/EdgeAPI/internal/utils/maps"
 	"github.com/iwind/TeaGo/assert"
+	"testing"
 )
 
 func TestNewFixedMap(t *testing.T) {

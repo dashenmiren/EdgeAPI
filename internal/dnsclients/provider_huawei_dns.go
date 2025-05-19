@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package dnsclients
 
 import (
@@ -7,6 +9,11 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/huaweidns"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/iwind/TeaGo/maps"
+	"github.com/iwind/TeaGo/types"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,12 +22,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/huaweidns"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/iwind/TeaGo/maps"
-	"github.com/iwind/TeaGo/types"
 )
 
 // HuaweiDNSDefaultEndpoint 默认Endpoint

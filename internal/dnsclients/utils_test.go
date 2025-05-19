@@ -1,10 +1,11 @@
+// Copyright 2024 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package dnsclients_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
 	"github.com/iwind/TeaGo/assert"
+	"testing"
 )
 
 func TestIsMasked(t *testing.T) {

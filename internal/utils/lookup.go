@@ -2,8 +2,6 @@ package utils
 
 import (
 	"errors"
-	"sync"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/taskutils"
 	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
@@ -12,6 +10,7 @@ import (
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/miekg/dns"
+	"sync"
 )
 
 var sharedDNSClient *dns.Client

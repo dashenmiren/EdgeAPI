@@ -1,11 +1,10 @@
 package models_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
+	"testing"
 )
 
 func TestMetricStatDAO_Clean(t *testing.T) {

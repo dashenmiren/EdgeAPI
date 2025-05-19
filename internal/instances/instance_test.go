@@ -1,11 +1,12 @@
+// Copyright 2024 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package instances_test
 
 import (
-	"testing"
-
 	"github.com/dashenmiren/EdgeAPI/internal/instances"
 	"github.com/iwind/TeaGo/Tea"
 	_ "github.com/iwind/TeaGo/bootstrap"
+	"testing"
 )
 
 var instance = instances.NewInstance(instances.Options{

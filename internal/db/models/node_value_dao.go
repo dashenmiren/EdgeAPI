@@ -2,9 +2,6 @@ package models
 
 import (
 	"encoding/json"
-	"strings"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
@@ -13,6 +10,8 @@ import (
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"strings"
+	"time"
 )
 
 type NodeValueDAO dbs.DAO

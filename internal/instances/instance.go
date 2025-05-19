@@ -1,3 +1,5 @@
+// Copyright 2024 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package instances
 
 import (
@@ -5,15 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
-	"net"
-	"os"
-	"path/filepath"
-	"regexp"
-	"runtime"
-	"strings"
-	"time"
-
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/installers/helpers"
@@ -30,6 +23,14 @@ import (
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
 	"gopkg.in/yaml.v3"
+	"log"
+	"net"
+	"os"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"strings"
+	"time"
 )
 
 type Instance struct {
@@ -489,7 +490,7 @@ func (this *Instance) SetupDB() error {
 				return err
 			}
 
-			_, err = models.SharedServerDAO.CreateServer(tx, 0, userId, serverconfigs.ServerTypeHTTPProxy, "First Site", "Created by system", []byte(`[{"name": "example.org", "type":"full"}]`), false, nil, httpConfigJSON, nil, nil, nil, nil, nil, webId, reverseProxyRefJSON, clusterId, nil, nil, nil, 0)
+			_, err = models.SharedServerDAO.CreateServer(tx, 0, userId, serverconfigs.ServerTypeHTTPProxy, "First Site", "Created by system", []byte(`[{"name": "example.org", "type":"full"}]`), false, nil, httpConfigJSON, nil, nil, nil, nil, webId, reverseProxyRefJSON, clusterId, nil, nil, nil, 0)
 			if err != nil {
 				return fmt.Errorf("create server failed: %w", err)
 			}

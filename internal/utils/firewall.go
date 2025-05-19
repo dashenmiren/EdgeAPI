@@ -1,12 +1,13 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package utils
 
 import (
-	"os/exec"
-	"runtime"
-
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	executils "github.com/dashenmiren/EdgeAPI/internal/utils/exec"
 	"github.com/iwind/TeaGo/types"
+	"os/exec"
+	"runtime"
 )
 
 func AddPortsToFirewall(ports []int) {

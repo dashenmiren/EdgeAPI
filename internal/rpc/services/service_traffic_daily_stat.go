@@ -1,13 +1,14 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package services
 
 import (
 	"context"
 	"fmt"
-	"regexp"
-
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/types"
+	"regexp"
 )
 
 // TrafficDailyStatService 按日统计服务

@@ -1,11 +1,12 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package ttlcache
 
 import (
-	"sync"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/zero"
+	"sync"
+	"time"
 )
 
 var SharedManager = NewManager()
