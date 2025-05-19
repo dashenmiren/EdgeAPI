@@ -439,7 +439,7 @@ func (this *DNSPodProvider) doAPI(path string, params map[string]string, respPtr
 		return fmt.Errorf("create request failed: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "GoCDN-Client/1.0.0")
+	req.Header.Set("User-Agent", "GoEdge-Client/1.0.0 (iwind.liu@gmail.com)")
 	req.Header.Set("Accept", "*/*")
 
 	resp, err := dnsPodHTTPClient.Do(req)

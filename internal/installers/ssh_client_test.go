@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package installers
 
 import (
@@ -52,7 +54,7 @@ func TestSSHClient_Home(t *testing.T) {
 }
 
 func TestSSHClient_Exec(t *testing.T) {
-	var client = testSSHClient(t, "root", "123456")
+	var client = testSSHClient(t, "example", "123456")
 	stdout, stderr, err := client.Exec("echo 'Hello'")
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +63,7 @@ func TestSSHClient_Exec(t *testing.T) {
 }
 
 func TestSSHClient_SudoExec(t *testing.T) {
-	var client = testSSHClient(t, "root", "123456")
+	var client = testSSHClient(t, "example", "123456")
 	client.Sudo("123456")
 	stdout, stderr, err := client.Exec("echo 'Hello'")
 	if err != nil {
@@ -71,9 +73,9 @@ func TestSSHClient_SudoExec(t *testing.T) {
 }
 
 func TestSSHClient_SudoExec2(t *testing.T) {
-	var client = testSSHClient(t, "root", "123456")
+	var client = testSSHClient(t, "example", "123456")
 	client.Sudo("123456")
-	stdout, stderr, err := client.Exec("/home/test111/edge-node/edge-node/bin/edge-node start")
+	stdout, stderr, err := client.Exec("/home/example/edge-node/edge-node/bin/edge-node start")
 	if err != nil {
 		t.Fatal(err)
 	}

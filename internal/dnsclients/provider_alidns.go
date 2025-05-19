@@ -4,10 +4,10 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/responses"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/alidns"
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 )

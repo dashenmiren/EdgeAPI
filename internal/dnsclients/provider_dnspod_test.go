@@ -11,7 +11,7 @@ import (
 	"github.com/iwind/TeaGo/maps"
 )
 
-const DNSPodTestDomain = "google.com"
+const DNSPodTestDomain = "cdn.foyeseo.com"
 
 func TestDNSPodProvider_GetDomains(t *testing.T) {
 	provider, _, err := testDNSPodProvider()

@@ -4,10 +4,12 @@ import (
 	"context"
 
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
 	"github.com/iwind/TeaGo/lists"
+	"github.com/iwind/TeaGo/rands"
 )
 
 // IPListService IP名单相关服务
@@ -25,18 +27,48 @@ func (this *IPListService) CreateIPList(ctx context.Context, req *pb.CreateIPLis
 
 	var tx = this.NullTx()
 
+	// 修正默认的代号
+	if req.Code == "white" || req.Code == "black" || req.Code == "grey" {
+		req.Code = req.Code + "-" + rands.HexString(8)
+	}
+
 	// 检查用户相关信息
+	var sourceUserId = userId
 	if userId > 0 {
-		// 检查服务ID
+		// 检查网站ID
 		if req.ServerId > 0 {
 			err = models.SharedServerDAO.CheckUserServer(tx, userId, req.ServerId)
 			if err != nil {
 				return nil, err
 			}
 		}
+	} else if req.ServerId > 0 {
+		sourceUserId, err = models.SharedServerDAO.FindServerUserId(tx, req.ServerId)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	listId, err := models.SharedIPListDAO.CreateIPList(tx, userId, req.ServerId, req.Type, req.Name, req.Code, req.TimeoutJSON, req.Description, req.IsPublic, req.IsGlobal)
+	// 检查代号
+	if len(req.Code) > 0 {
+		if len(req.Code) > 100 {
+			return nil, errors.New("too long 'code', should be short than 100 characters")
+		}
+
+		if !models.SharedIPListDAO.ValidateIPListCode(req.Code) {
+			return nil, errors.New("invalid 'code' format")
+		}
+
+		oldListId, findErr := models.SharedIPListDAO.FindIPListIdWithCode(tx, req.Code)
+		if findErr != nil {
+			return nil, findErr
+		}
+		if oldListId > 0 {
+			return nil, errors.New("the code '" + req.Code + "' has been used")
+		}
+	}
+
+	listId, err := models.SharedIPListDAO.CreateIPList(tx, sourceUserId, req.ServerId, req.Type, req.Name, req.Code, req.TimeoutJSON, req.Description, req.IsPublic, req.IsGlobal)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +84,25 @@ func (this *IPListService) UpdateIPList(ctx context.Context, req *pb.UpdateIPLis
 	}
 
 	var tx = this.NullTx()
+
+	// 检查代号
+	if len(req.Code) > 0 {
+		if len(req.Code) > 100 {
+			return nil, errors.New("too long 'code', should be short than 100 characters")
+		}
+
+		if !models.SharedIPListDAO.ValidateIPListCode(req.Code) {
+			return nil, errors.New("invalid 'code' format")
+		}
+
+		oldListId, findErr := models.SharedIPListDAO.FindIPListIdWithCode(tx, req.Code)
+		if findErr != nil {
+			return nil, findErr
+		}
+		if oldListId > 0 && oldListId != req.IpListId {
+			return nil, errors.New("the code '" + req.Code + "' has been used")
+		}
+	}
 
 	err = models.SharedIPListDAO.UpdateIPList(tx, req.IpListId, req.Name, req.Code, req.TimeoutJSON, req.Description)
 	if err != nil {
@@ -71,7 +122,7 @@ func (this *IPListService) FindEnabledIPList(ctx context.Context, req *pb.FindEn
 	var tx = this.NullTx()
 	if userId > 0 {
 		// 检查用户所属名单
-		if req.IpListId != firewallconfigs.GlobalListId {
+		if !firewallconfigs.IsGlobalListId(req.IpListId) {
 			err = models.SharedIPListDAO.CheckUserIPList(tx, userId, req.IpListId)
 			if err != nil {
 				return nil, err
@@ -249,5 +300,36 @@ func (this *IPListService) FindServerIdWithIPListId(ctx context.Context, req *pb
 
 	return &pb.FindServerIdWithIPListIdResponse{
 		ServerId: serverId,
+	}, nil
+}
+
+// FindIPListIdWithCode 根据IP名单代号获取IP名单ID
+func (this *IPListService) FindIPListIdWithCode(ctx context.Context, req *pb.FindIPListIdWithCodeRequest) (*pb.FindIPListIdWithCodeResponse, error) {
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(req.Code) == 0 {
+		return nil, errors.New("require 'code'")
+	}
+
+	var tx = this.NullTx()
+	listId, err := models.SharedIPListDAO.FindIPListIdWithCode(tx, req.Code)
+	if err != nil {
+		return nil, err
+	}
+
+	if listId > 0 {
+		if userId > 0 {
+			err = models.SharedIPListDAO.CheckUserIPList(tx, userId, listId)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return &pb.FindIPListIdWithCodeResponse{
+		IpListId: listId,
 	}, nil
 }

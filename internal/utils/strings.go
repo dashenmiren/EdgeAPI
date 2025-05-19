@@ -1,6 +1,9 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package utils
 
 import (
+	"github.com/iwind/TeaGo/lists"
 	"strings"
 )
 
@@ -130,4 +133,13 @@ func parseKeywordValue(value string) (arg splitArg) {
 		arg.Value = value
 	}
 	return
+}
+
+func ListIsGreaterEqualThanOther(list []string, otherList []string) bool {
+	for _, v := range otherList {
+		if !lists.Contains(list, v) {
+			return false
+		}
+	}
+	return true
 }

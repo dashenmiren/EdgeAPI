@@ -16,8 +16,8 @@ import (
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
-	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/zero"
+	"github.com/dashenmiren/EdgeCommon/pkg/iputils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
@@ -521,14 +521,27 @@ func (this *HTTPAccessLogDAO) listAccessLogs(tx *dbs.Tx,
 
 			// keyword
 			if len(ip) > 0 {
-				// TODO 支持IP范围
 				if tableQuery.hasRemoteAddrField {
 					// IP格式
 					if strings.Contains(ip, ",") || strings.Contains(ip, "-") {
-						rangeConfig, err := shared.ParseIPRange(ip)
-						if err == nil {
+						rangeConfig, parseErr := shared.ParseIPRange(ip)
+						if parseErr == nil {
 							if len(rangeConfig.IPFrom) > 0 && len(rangeConfig.IPTo) > 0 {
-								query.Between("INET_ATON(remoteAddr)", utils.IP2Long(rangeConfig.IPFrom), utils.IP2Long(rangeConfig.IPTo))
+								if iputils.IsIPv6(rangeConfig.IPFrom) || iputils.IsIPv6(rangeConfig.IPTo) {
+									var ipFromHex = iputils.ToHex(rangeConfig.IPFrom)
+									var ipToHex = iputils.ToHex(rangeConfig.IPTo)
+									if ipFromHex > ipToHex {
+										ipFromHex, ipToHex = ipToHex, ipFromHex
+									}
+									query.Between("HEX(INET6_ATON(remoteAddr))", ipFromHex, ipToHex)
+								} else {
+									var ipFromLong = iputils.ToLong(rangeConfig.IPFrom)
+									var ipToLong = iputils.ToLong(rangeConfig.IPTo)
+									if ipFromLong > ipToLong {
+										ipFromLong, ipToLong = ipToLong, ipFromLong
+									}
+									query.Between("INET_ATON(remoteAddr)", ipFromLong, ipToLong)
+								}
 							}
 						}
 					} else {
@@ -581,7 +594,7 @@ func (this *HTTPAccessLogDAO) listAccessLogs(tx *dbs.Tx,
 					if len(pieces) == 1 || len(pieces[1]) == 0 || pieces[0] == pieces[1] {
 						query.Attr("remoteAddr", pieces[0])
 					} else {
-						query.Between("INET_ATON(remoteAddr)", utils.IP2Long(pieces[0]), utils.IP2Long(pieces[1]))
+						query.Between("INET_ATON(remoteAddr)", iputils.ToLong(pieces[0]), iputils.ToLong(pieces[1]))
 					}
 				} else if statusRangeReg.MatchString(keyword) { // status:200-400
 					isSpecialKeyword = true

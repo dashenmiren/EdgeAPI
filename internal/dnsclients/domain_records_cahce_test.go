@@ -1,3 +1,5 @@
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved. Official site: https://cdn.foyeseo.com .
+
 package dnsclients_test
 
 import (
@@ -21,7 +23,7 @@ func TestDomainRecordsCache_WriteDomainRecords(t *testing.T) {
 		},
 	})
 
-	//time.Sleep(30 * time.Second)
+	// time.Sleep(30 * time.Second)
 
 	{
 		t.Log(cache.QueryDomainRecord(1, "a", "hello", "A"))

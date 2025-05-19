@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
+	"github.com/dashenmiren/EdgeAPI/internal/configs"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
@@ -18,7 +18,6 @@ import (
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
 	stringutil "github.com/iwind/TeaGo/utils/string"
-	"gopkg.in/yaml.v3"
 )
 
 // SQLExecutor 安装或升级SQL执行器
@@ -35,12 +34,7 @@ func NewSQLExecutor(dbConfig *dbs.DBConfig) *SQLExecutor {
 
 func NewSQLExecutorFromCmd() (*SQLExecutor, error) {
 	// 执行SQL
-	var config = &dbs.Config{}
-	configData, err := os.ReadFile(Tea.ConfigFile("db.yaml"))
-	if err != nil {
-		return nil, err
-	}
-	err = yaml.Unmarshal(configData, config)
+	config, err := configs.LoadDBConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +54,7 @@ func (this *SQLExecutor) Run(showLog bool) error {
 	// prevent default configure loading
 	var globalConfig = dbs.GlobalConfig()
 	if globalConfig != nil && len(globalConfig.DBs) == 0 {
-		globalConfig.DBs = map[string]*dbs.DBConfig{"prod": this.dbConfig}
+		globalConfig.DBs = map[string]*dbs.DBConfig{Tea.Env: this.dbConfig}
 	}
 
 	defer func() {
@@ -321,6 +315,9 @@ func (this *SQLExecutor) checkCluster(db *dbs.DB) error {
 
 	models.SharedNodeClusterDAO = models.NewNodeClusterDAO()
 	models.SharedNodeClusterDAO.Instance = db
+
+	models.SharedIPListDAO = models.NewIPListDAO()
+	models.SharedIPListDAO.Instance = db
 
 	policyId, err = models.SharedHTTPFirewallPolicyDAO.CreateDefaultFirewallPolicy(nil, "默认集群")
 	if err != nil {

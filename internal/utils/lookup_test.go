@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package utils_test
 
 import (
@@ -8,15 +10,15 @@ import (
 )
 
 func TestLookupCNAME(t *testing.T) {
-	t.Log(utils.LookupCNAME("google.com"))
+	t.Log(utils.LookupCNAME("www.yun4s.cn"))
 }
 
 func TestLookupNS(t *testing.T) {
-	t.Log(utils.LookupNS("google.com", nil))
+	t.Log(utils.LookupNS("goedge.cn", nil))
 }
 
 func TestLookupNSExtra(t *testing.T) {
-	t.Log(utils.LookupNS("google.com", []*dnsconfigs.DNSResolver{
+	t.Log(utils.LookupNS("goedge.cn", []*dnsconfigs.DNSResolver{
 		{
 			Host: "192.168.2.2",
 		},
@@ -32,5 +34,5 @@ func TestLookupNSExtra(t *testing.T) {
 }
 
 func TestLookupTXT(t *testing.T) {
-	t.Log(utils.LookupTXT("google.com", nil))
+	t.Log(utils.LookupTXT("yanzheng.goedge.cn", nil))
 }

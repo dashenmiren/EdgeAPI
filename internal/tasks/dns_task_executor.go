@@ -11,8 +11,8 @@ import (
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
-	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/iputils"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
@@ -435,7 +435,7 @@ func (this *DNSTaskExecutor) doCluster(taskId int64, taskVersion int64, clusterI
 				}
 
 				var recordType = dnstypes.RecordTypeA
-				if utils.IsIPv6(ip) {
+				if iputils.IsIPv6(ip) {
 					recordType = dnstypes.RecordTypeAAAA
 				}
 

@@ -1023,6 +1023,7 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64, dataMap *shared
 		GroupId:       int64(node.GroupId),
 		EnableIPLists: node.EnableIPLists,
 		APINodeAddrs:  node.DecodeAPINodeAddrs(),
+		BypassMobile:  node.BypassMobile,
 
 		DataMap: dataMap,
 	}
@@ -1104,6 +1105,11 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64, dataMap *shared
 		}
 		if nodeCluster == nil || !nodeCluster.IsOn {
 			continue
+		}
+
+		// 集群密钥
+		if len(config.ClusterSecret) == 0 {
+			config.ClusterSecret = nodeCluster.Secret
 		}
 
 		// 所有节点IP地址
@@ -1245,10 +1251,13 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64, dataMap *shared
 			}
 		}
 
-		// 自动安装nftables
+		// 自动安装nftables等集群配置
 		if clusterIndex == 0 {
 			config.AutoInstallNftables = nodeCluster.AutoInstallNftables
 			config.AutoSystemTuning = nodeCluster.AutoSystemTuning
+			config.AutoTrimDisks = nodeCluster.AutoTrimDisks
+			config.MaxConcurrentReads = int(nodeCluster.MaxConcurrentReads)
+			config.MaxConcurrentWrites = int(nodeCluster.MaxConcurrentWrites)
 		}
 
 		// 安全设置
@@ -1754,6 +1763,21 @@ func (this *NodeDAO) UpdateNodeSystem(tx *dbs.Tx, nodeId int64, maxCPU int32) er
 	var op = NewNodeOperator()
 	op.Id = nodeId
 	op.MaxCPU = maxCPU
+	err := this.Save(tx, op)
+	if err != nil {
+		return err
+	}
+	return this.NotifyUpdate(tx, nodeId)
+}
+
+// UpdateNodeBypassMobile 设置是否过移动
+func (this *NodeDAO) UpdateNodeBypassMobile(tx *dbs.Tx, nodeId int64, bypass int32) error {
+	if nodeId <= 0 {
+		return errors.New("invalid nodeId")
+	}
+	var op = NewNodeOperator()
+	op.Id = nodeId
+	op.BypassMobile = bypass
 	err := this.Save(tx, op)
 	if err != nil {
 		return err

@@ -2,7 +2,6 @@ package models
 
 import (
 	"encoding/json"
-
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/iplibrary"
 	_ "github.com/go-sql-driver/mysql"

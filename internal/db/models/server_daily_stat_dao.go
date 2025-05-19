@@ -2,11 +2,6 @@ package models
 
 import (
 	"fmt"
-	"regexp"
-	"sort"
-	"strings"
-	"time"
-
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
@@ -20,6 +15,10 @@ import (
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
 )
 
 type ServerDailyStatDAO dbs.DAO
@@ -140,6 +139,7 @@ func (this *ServerDailyStatDAO) SaveStats(tx *dbs.Tx, stats []*pb.ServerDailySta
 
 	return nil
 }
+
 
 // SumCurrentDailyStat 查找当前时刻的数据统计
 func (this *ServerDailyStatDAO) SumCurrentDailyStat(tx *dbs.Tx, serverId int64) (*ServerDailyStat, error) {

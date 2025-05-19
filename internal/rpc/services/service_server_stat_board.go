@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package services
 
 import (
@@ -72,7 +74,7 @@ func (this *ServerStatBoardService) ComposeServerStatNodeClusterBoard(ctx contex
 	}
 	result.CountInactiveNodes = countInactiveNodes
 
-	countUsers, err := models.SharedUserDAO.CountAllEnabledUsers(tx, req.NodeClusterId, "", false)
+	countUsers, err := models.SharedUserDAO.CountAllEnabledUsers(tx, req.NodeClusterId, "", false, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -468,6 +470,17 @@ func (this *ServerStatBoardService) ComposeServerStatBoard(ctx context.Context, 
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// 当日统计
+	{
+		var day = timeutil.Format("Ymd")
+		stat, err := models.SharedServerBandwidthStatDAO.SumDailyStat(tx, req.ServerId, 0, day, day)
+		if err != nil {
+			return nil, err
+		}
+		result.DailyCountIPs = stat.CountIPs
+		result.DailyTrafficBytes = stat.Bytes
 	}
 
 	// 带宽统计

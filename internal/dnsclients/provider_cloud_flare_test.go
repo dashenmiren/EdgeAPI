@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package dnsclients
 
 import (
@@ -36,9 +38,9 @@ func TestCloudFlareProvider_GetRecords(t *testing.T) {
 		logs.PrintAsJSON(records, t)
 	}
 
-	t.Log("===teaos.cn===")
+	t.Log("===example.com===")
 	{
-		records, err := provider.GetRecords("teaos.cn")
+		records, err := provider.GetRecords("example.com")
 		if err != nil {
 			t.Fatal(err)
 		}

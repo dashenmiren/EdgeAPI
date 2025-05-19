@@ -18,7 +18,7 @@ func TestRequest_Run_DNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	user := NewUser("19644627@qq.com", privateKey, func(resource *registration.Resource) error {
+	user := NewUser("example@qq.com", privateKey, func(resource *registration.Resource) error {
 		resourceJSON, err := json.Marshal(resource)
 		if err != nil {
 			return err
@@ -27,7 +27,7 @@ func TestRequest_Run_DNS(t *testing.T) {
 		return nil
 	})
 
-	regResource := []byte(`{"body":{"status":"valid","contact":["mailto:19644627@qq.com"]},"uri":"https://acme-v02.api.letsencrypt.org/acme/acct/103672877"}`)
+	regResource := []byte(`{"body":{"status":"valid","contact":["mailto:example@qq.com"]},"uri":"https://acme-v02.api.letsencrypt.org/acme/acct/103672877"}`)
 	err = user.SetRegistration(regResource)
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ func TestRequest_Run_HTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	user := NewUser("19644627@qq.com", privateKey, func(resource *registration.Resource) error {
+	user := NewUser("example@qq.com", privateKey, func(resource *registration.Resource) error {
 		resourceJSON, err := json.Marshal(resource)
 		if err != nil {
 			return err
@@ -68,7 +68,7 @@ func TestRequest_Run_HTTP(t *testing.T) {
 		return nil
 	})
 
-	regResource := []byte(`{"body":{"status":"valid","contact":["mailto:19644627@qq.com"]},"uri":"https://acme-v02.api.letsencrypt.org/acme/acct/103672877"}`)
+	regResource := []byte(`{"body":{"status":"valid","contact":["mailto:example@qq.com"]},"uri":"https://acme-v02.api.letsencrypt.org/acme/acct/103672877"}`)
 	err = user.SetRegistration(regResource)
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestRequest_Run_HTTP(t *testing.T) {
 	req := NewRequest(&Task{
 		User:     user,
 		AuthType: AuthTypeHTTP,
-		Domains:  []string{"teaos.cn", "www.teaos.cn", "meloy.cn"},
+		Domains:  []string{"example.com", "www.example.com", "meloy.cn"},
 	})
 	certData, keyData, err := req.runHTTP()
 	if err != nil {

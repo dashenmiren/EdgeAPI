@@ -1,4 +1,4 @@
-
+// Copyright 2022 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
 //go:build !plus
 
 package dnsclients
@@ -32,6 +32,10 @@ func FindProvider(providerType ProviderType, providerId int64) ProviderInterface
 		}
 	case ProviderTypeEdgeDNSAPI:
 		return &EdgeDNSAPIProvider{
+			ProviderId: providerId,
+		}
+	case ProviderTypeDNSLA:
+		return &DNSLaProvider{
 			ProviderId: providerId,
 		}
 	}

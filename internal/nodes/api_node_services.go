@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package nodes
 
 import (
@@ -331,6 +333,11 @@ func (this *APINode) registerServices(server *grpc.Server) {
 	{
 		var instance = this.serviceInstance(&services.LoginSessionService{}).(*services.LoginSessionService)
 		pb.RegisterLoginSessionServiceServer(server, instance)
+		this.rest(instance)
+	}
+	{
+		var instance = this.serviceInstance(&services.LoginTicketService{}).(*services.LoginTicketService)
+		pb.RegisterLoginTicketServiceServer(server, instance)
 		this.rest(instance)
 	}
 	{

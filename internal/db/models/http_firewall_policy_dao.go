@@ -7,6 +7,7 @@ import (
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ipconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -135,7 +136,7 @@ func (this *HTTPFirewallPolicyDAO) CreateFirewallPolicy(tx *dbs.Tx, userId int64
 
 	if userId <= 0 && serverGroupId <= 0 && serverId <= 0 {
 		// synFlood
-		var synFloodConfig = firewallconfigs.DefaultSYNFloodConfig()
+		var synFloodConfig = firewallconfigs.NewSYNFloodConfig()
 		synFloodJSON, err := json.Marshal(synFloodConfig)
 		if err != nil {
 			return 0, err
@@ -143,7 +144,7 @@ func (this *HTTPFirewallPolicyDAO) CreateFirewallPolicy(tx *dbs.Tx, userId int64
 		op.SynFlood = synFloodJSON
 
 		// block options
-		var blockOptions = firewallconfigs.DefaultHTTPFirewallBlockAction()
+		var blockOptions = firewallconfigs.NewHTTPFirewallBlockAction()
 		blockOptionsJSON, err := json.Marshal(blockOptions)
 		if err != nil {
 			return 0, err
@@ -151,7 +152,7 @@ func (this *HTTPFirewallPolicyDAO) CreateFirewallPolicy(tx *dbs.Tx, userId int64
 		op.BlockOptions = blockOptionsJSON
 
 		// page options
-		var pageOptions = firewallconfigs.DefaultHTTPFirewallPageAction()
+		var pageOptions = firewallconfigs.NewHTTPFirewallPageAction()
 		pageOptionsJSON, err := json.Marshal(pageOptions)
 		if err != nil {
 			return 0, err
@@ -159,12 +160,20 @@ func (this *HTTPFirewallPolicyDAO) CreateFirewallPolicy(tx *dbs.Tx, userId int64
 		op.PageOptions = pageOptionsJSON
 
 		// captcha options
-		var captchaOptions = firewallconfigs.DefaultHTTPFirewallCaptchaAction()
+		var captchaOptions = firewallconfigs.NewHTTPFirewallCaptchaAction()
 		captchaOptionsJSON, err := json.Marshal(captchaOptions)
 		if err != nil {
 			return 0, err
 		}
 		op.CaptchaOptions = captchaOptionsJSON
+
+		// jscookie options
+		var jsCookieOptions = firewallconfigs.NewHTTPFirewallJavascriptCookieAction()
+		jsCookieOptionsJSON, err := json.Marshal(jsCookieOptions)
+		if err != nil {
+			return 0, err
+		}
+		op.JsCookieOptions = jsCookieOptionsJSON
 	}
 
 	err := this.Save(tx, op)
@@ -231,7 +240,7 @@ func (this *HTTPFirewallPolicyDAO) CreateDefaultFirewallPolicy(tx *dbs.Tx, name 
 		return 0, err
 	}
 
-	err = this.UpdateFirewallPolicyInboundAndOutbound(tx, policyId, inboundConfigJSON, outboundConfigJSON, false)
+	err = this.UpdateFirewallPolicyInboundAndOutbound(tx, policyId, 0, 0, inboundConfigJSON, outboundConfigJSON, false)
 	if err != nil {
 		return 0, err
 	}
@@ -240,10 +249,60 @@ func (this *HTTPFirewallPolicyDAO) CreateDefaultFirewallPolicy(tx *dbs.Tx, name 
 }
 
 // UpdateFirewallPolicyInboundAndOutbound 修改策略的Inbound和Outbound
-func (this *HTTPFirewallPolicyDAO) UpdateFirewallPolicyInboundAndOutbound(tx *dbs.Tx, policyId int64, inboundJSON []byte, outboundJSON []byte, shouldNotify bool) error {
+func (this *HTTPFirewallPolicyDAO) UpdateFirewallPolicyInboundAndOutbound(tx *dbs.Tx, policyId int64, userId int64, serverId int64, inboundJSON []byte, outboundJSON []byte, shouldNotify bool) error {
 	if policyId <= 0 {
 		return errors.New("invalid policyId")
 	}
+
+	// 创建默认的Inbound
+	var inboundConfig = &firewallconfigs.HTTPFirewallInboundConfig{IsOn: true}
+	if inboundJSON != nil {
+		err := json.Unmarshal(inboundJSON, inboundConfig)
+		if err != nil {
+			return err
+		}
+	}
+
+	// IP名单
+	if inboundConfig.AllowListRef == nil {
+		listId, createListErr := SharedIPListDAO.CreateIPList(tx, userId, serverId, ipconfigs.IPListTypeWhite, "白名单", "", nil, "", false, false)
+		if createListErr != nil {
+			return createListErr
+		}
+		inboundConfig.AllowListRef = &ipconfigs.IPListRef{
+			IsOn:   true,
+			ListId: listId,
+		}
+	}
+
+	if inboundConfig.DenyListRef == nil {
+		listId, createListErr := SharedIPListDAO.CreateIPList(tx, userId, serverId, ipconfigs.IPListTypeBlack, "黑名单", "", nil, "", false, false)
+		if createListErr != nil {
+			return createListErr
+		}
+		inboundConfig.DenyListRef = &ipconfigs.IPListRef{
+			IsOn:   true,
+			ListId: listId,
+		}
+	}
+
+	if inboundConfig.GreyListRef == nil {
+		listId, createListErr := SharedIPListDAO.CreateIPList(tx, userId, serverId, ipconfigs.IPListTypeGrey, "灰名单", "", nil, "", false, false)
+		if createListErr != nil {
+			return createListErr
+		}
+		inboundConfig.GreyListRef = &ipconfigs.IPListRef{
+			IsOn:   true,
+			ListId: listId,
+		}
+	}
+
+	var err error
+	inboundJSON, err = json.Marshal(inboundConfig)
+	if err != nil {
+		return err
+	}
+
 	var op = NewHTTPFirewallPolicyOperator()
 	op.Id = policyId
 	if len(inboundJSON) > 0 {
@@ -256,7 +315,7 @@ func (this *HTTPFirewallPolicyDAO) UpdateFirewallPolicyInboundAndOutbound(tx *db
 	} else {
 		op.Outbound = "null"
 	}
-	err := this.Save(tx, op)
+	err = this.Save(tx, op)
 	if err != nil {
 		return err
 	}
@@ -324,6 +383,7 @@ func (this *HTTPFirewallPolicyDAO) UpdateFirewallPolicy(tx *dbs.Tx,
 	blockOptionsJSON []byte,
 	pageOptionsJSON []byte,
 	captchaOptionsJSON []byte,
+	jsCookieOptionsJSON []byte,
 	mode firewallconfigs.FirewallMode,
 	useLocalFirewall bool,
 	synFloodConfig *firewallconfigs.SYNFloodConfig,
@@ -358,6 +418,9 @@ func (this *HTTPFirewallPolicyDAO) UpdateFirewallPolicy(tx *dbs.Tx,
 	}
 	if IsNotNull(captchaOptionsJSON) {
 		op.CaptchaOptions = captchaOptionsJSON
+	}
+	if IsNotNull(jsCookieOptionsJSON) {
+		op.JsCookieOptions = jsCookieOptionsJSON
 	}
 
 	if synFloodConfig != nil {
@@ -529,7 +592,7 @@ func (this *HTTPFirewallPolicyDAO) ComposeFirewallPolicy(tx *dbs.Tx, policyId in
 
 	// Block动作配置
 	if IsNotNull(policy.BlockOptions) {
-		var blockAction = &firewallconfigs.HTTPFirewallBlockAction{}
+		var blockAction = firewallconfigs.NewHTTPFirewallBlockAction()
 		err = json.Unmarshal(policy.BlockOptions, blockAction)
 		if err != nil {
 			return config, err
@@ -539,7 +602,7 @@ func (this *HTTPFirewallPolicyDAO) ComposeFirewallPolicy(tx *dbs.Tx, policyId in
 
 	// Page动作配置
 	if IsNotNull(policy.PageOptions) {
-		var pageAction = firewallconfigs.DefaultHTTPFirewallPageAction()
+		var pageAction = firewallconfigs.NewHTTPFirewallPageAction()
 		err = json.Unmarshal(policy.PageOptions, pageAction)
 		if err != nil {
 			return config, err
@@ -549,12 +612,22 @@ func (this *HTTPFirewallPolicyDAO) ComposeFirewallPolicy(tx *dbs.Tx, policyId in
 
 	// Captcha动作配置
 	if IsNotNull(policy.CaptchaOptions) {
-		var captchaAction = &firewallconfigs.HTTPFirewallCaptchaAction{}
+		var captchaAction = firewallconfigs.NewHTTPFirewallCaptchaAction()
 		err = json.Unmarshal(policy.CaptchaOptions, captchaAction)
 		if err != nil {
 			return config, err
 		}
 		config.CaptchaOptions = captchaAction
+	}
+
+	// JSCookie动作配置
+	if IsNotNull(policy.JsCookieOptions) {
+		var jsCookieAction = firewallconfigs.NewHTTPFirewallJavascriptCookieAction()
+		err = json.Unmarshal(policy.JsCookieOptions, jsCookieAction)
+		if err != nil {
+			return config, err
+		}
+		config.JSCookieOptions = jsCookieAction
 	}
 
 	// syn flood
@@ -624,7 +697,7 @@ func (this *HTTPFirewallPolicyDAO) FindEnabledFirewallPolicyIdsWithIPListId(tx *
 	ones, err := this.Query(tx).
 		ResultPk().
 		State(HTTPFirewallPolicyStateEnabled).
-		Where("(JSON_CONTAINS(inbound, :listQuery, '$.whiteListRef') OR JSON_CONTAINS(inbound, :listQuery, '$.blackListRef') OR JSON_CONTAINS(inbound, :listQuery, '$.publicWhiteListRefs')  OR JSON_CONTAINS(inbound, :listQuery, '$.publicBlackListRefs'))").
+		Where("(JSON_CONTAINS(inbound, :listQuery, '$.whiteListRef') OR JSON_CONTAINS(inbound, :listQuery, '$.blackListRef') OR JSON_CONTAINS(inbound, :listQuery, '$.publicWhiteListRefs')  OR JSON_CONTAINS(inbound, :listQuery, '$.publicBlackListRefs') OR JSON_CONTAINS(inbound, :listQuery, '$.publicGreyListRefs'))").
 		Param("listQuery", maps.Map{"isOn": true, "listId": ipListId}.AsJSON()).
 		FindAll()
 	if err != nil {
@@ -642,7 +715,7 @@ func (this *HTTPFirewallPolicyDAO) FindEnabledFirewallPolicyIdsWithIPListId(tx *
 func (this *HTTPFirewallPolicyDAO) FindEnabledFirewallPolicyWithIPListId(tx *dbs.Tx, ipListId int64) (*HTTPFirewallPolicy, error) {
 	one, err := this.Query(tx).
 		State(HTTPFirewallPolicyStateEnabled).
-		Where("(JSON_CONTAINS(inbound, :listQuery, '$.whiteListRef') OR JSON_CONTAINS(inbound, :listQuery, '$.blackListRef'))").
+		Where("(JSON_CONTAINS(inbound, :listQuery, '$.whiteListRef') OR JSON_CONTAINS(inbound, :listQuery, '$.blackListRef') OR JSON_CONTAINS(inbound, :listQuery, '$.greyListRef'))").
 		Param("listQuery", maps.Map{"isOn": true, "listId": ipListId}.AsJSON()).
 		Find()
 	if err != nil || one == nil {

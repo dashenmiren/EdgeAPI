@@ -9,7 +9,6 @@ import (
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
@@ -20,7 +19,6 @@ import (
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
-	stringutil "github.com/iwind/TeaGo/utils/string"
 )
 
 type upgradeVersion struct {
@@ -118,10 +116,10 @@ func UpgradeSQLData(db *dbs.DB) error {
 	if err != nil {
 		return err
 	}
-	versionString := types.String(version)
+	var versionString = types.String(version)
 	if len(versionString) > 0 {
 		for _, f := range upgradeFuncs {
-			if stringutil.VersionCompare(versionString, f.version) >= 0 {
+			if CompareVersion(versionString, f.version) >= 0 {
 				continue
 			}
 			err = f.f(db)
@@ -264,20 +262,6 @@ func upgradeV0_0_9(db *dbs.DB) error {
 
 // v0.0.10
 func upgradeV0_0_10(db *dbs.DB) error {
-	// IP Item列表转换
-	ones, _, err := db.FindOnes("SELECT * FROM edgeIPItems ORDER BY id ASC")
-	if err != nil {
-		return err
-	}
-	for _, one := range ones {
-		ipFromLong := utils.IP2Long(one.GetString("ipFrom"))
-		ipToLong := utils.IP2Long(one.GetString("ipTo"))
-		_, err = db.Exec("UPDATE edgeIPItems SET ipFromLong=?, ipToLong=? WHERE id=?", ipFromLong, ipToLong, one.GetInt64("id"))
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -529,7 +513,7 @@ func upgradeV0_3_7(db *dbs.DB) error {
 // v0.4.0
 func upgradeV0_4_0(db *dbs.DB) error {
 	// 升级SYN Flood配置
-	synFloodJSON, err := json.Marshal(firewallconfigs.DefaultSYNFloodConfig())
+	synFloodJSON, err := json.Marshal(firewallconfigs.NewSYNFloodConfig())
 	if err == nil {
 		_, err := db.Exec("UPDATE edgeHTTPFirewallPolicies SET synFlood=? WHERE synFlood IS NULL AND state=1", string(synFloodJSON))
 		if err != nil {

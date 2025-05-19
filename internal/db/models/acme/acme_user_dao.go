@@ -6,12 +6,12 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
-
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
+	mrand "math/rand"
 )
 
 const (
@@ -209,4 +209,18 @@ func (this *ACMEUserDAO) CheckACMEUser(tx *dbs.Tx, acmeUserId int64, adminId int
 	return query.
 		State(ACMEUserStateEnabled).
 		Exist()
+}
+func (this *ACMEUserDAO) FindRandomACMEUserWithSameProvider(tx *dbs.Tx, providerCode string) (*ACMEUser, error) {
+	results, err := this.Query(tx).
+		Attr("providerCode", providerCode).
+		Attr("userId", 0).
+		FindAll()
+	if results == nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, errors.New("no acme user found")
+	}
+	idx := mrand.Intn(len(results))
+	return results[idx].(*ACMEUser), err
 }

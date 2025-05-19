@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package services
 
 import (
@@ -70,15 +72,17 @@ func init() {
 						}()
 					}
 
-					err = models.SharedMetricStatDAO.DeleteNodeItemStats(tx, nodeId, serverId, itemId, req.Time)
-					if err != nil {
-						return err
-					}
-
-					for _, stat := range req.MetricStats {
-						err := models.SharedMetricStatDAO.CreateStat(tx, stat.Hash, clusterId, nodeId, req.ServerId, req.ItemId, stat.Keys, float64(stat.Value), req.Time, req.Version)
+					if len(req.MetricStats) > 0 {
+						err = models.SharedMetricStatDAO.DeleteNodeItemStats(tx, nodeId, serverId, itemId, req.Time, req.KeepKeys)
 						if err != nil {
 							return err
+						}
+
+						for _, stat := range req.MetricStats {
+							err = models.SharedMetricStatDAO.CreateStat(tx, stat.Hash, clusterId, nodeId, req.ServerId, req.ItemId, stat.Keys, float64(stat.Value), req.Time, req.Version)
+							if err != nil {
+								return err
+							}
 						}
 					}
 

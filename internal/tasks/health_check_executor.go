@@ -14,8 +14,8 @@ import (
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/iputils"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeutils"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
@@ -260,7 +260,7 @@ func (this *HealthCheckExecutor) runNode(healthCheckConfig *serverconfigs.Health
 // 检查单个节点
 func (this *HealthCheckExecutor) runNodeOnce(healthCheckConfig *serverconfigs.HealthCheckConfig, result *HealthCheckResult) error {
 	// 支持IPv6
-	if utils.IsIPv6(result.NodeAddr) {
+	if iputils.IsIPv6(result.NodeAddr) {
 		result.NodeAddr = configutils.QuoteIP(result.NodeAddr)
 	}
 
@@ -273,6 +273,7 @@ func (this *HealthCheckExecutor) runNodeOnce(healthCheckConfig *serverconfigs.He
 	if err != nil {
 		return err
 	}
+	req.Close = true
 	if len(healthCheckConfig.UserAgent) > 0 {
 		req.Header.Set("User-Agent", healthCheckConfig.UserAgent)
 	} else {
@@ -303,9 +304,9 @@ func (this *HealthCheckExecutor) runNodeOnce(healthCheckConfig *serverconfigs.He
 				}
 				return net.DialTimeout(network, configutils.QuoteIP(result.NodeAddr)+":"+port, timeout)
 			},
-			MaxIdleConns:          1,
-			MaxIdleConnsPerHost:   1,
-			MaxConnsPerHost:       1,
+			MaxIdleConns:          3,
+			MaxIdleConnsPerHost:   3,
+			MaxConnsPerHost:       3,
 			IdleConnTimeout:       10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 			TLSHandshakeTimeout:   0,

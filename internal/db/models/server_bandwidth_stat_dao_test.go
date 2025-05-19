@@ -17,7 +17,7 @@ import (
 func TestServerBandwidthStatDAO_UpdateServerBandwidth(t *testing.T) {
 	var dao = models.NewServerBandwidthStatDAO()
 	var tx *dbs.Tx
-	err := dao.UpdateServerBandwidth(tx, 1, 1, 0, 0, timeutil.Format("Ymd"), timeutil.FormatTime("Hi", time.Now().Unix()/300*300), 1024, 300, 0, 0, 0, 0, 0)
+	err := dao.UpdateServerBandwidth(tx, 1, 1, 0, 0, timeutil.Format("Ymd"), timeutil.FormatTime("Hi", time.Now().Unix()/300*300), 1024, 300, 0, 0, 0, 0, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestSeverBandwidthStatDAO_InsertManyStats(t *testing.T) {
 		}
 		var day = timeutil.Format("Ymd", time.Now().AddDate(0, 0, -rands.Int(0, 200)))
 		var minute = fmt.Sprintf("%02d%02d", rands.Int(0, 23), rands.Int(0, 59))
-		err := dao.UpdateServerBandwidth(tx, 1, int64(rands.Int(1, 10000)), 0, 0, day, minute, 1024, 300, 0, 0, 0, 0, 0)
+		err := dao.UpdateServerBandwidth(tx, 1, int64(rands.Int(1, 10000)), 0, 0, day, minute, 1024, 300, 0, 0, 0, 0, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

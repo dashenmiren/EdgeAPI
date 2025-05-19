@@ -1,3 +1,5 @@
+// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+
 package reporters
 
 import (
@@ -37,3 +39,4 @@ func validateClient(tx *dbs.Tx, nodeId int64, ctx context.Context) error {
 	}
 	return errors.New("client was not allowed")
 }
+

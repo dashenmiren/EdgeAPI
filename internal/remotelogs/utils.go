@@ -3,12 +3,12 @@ package remotelogs
 import (
 	"time"
 
-	"github.com/cespare/xxhash"
 	"github.com/dashenmiren/EdgeAPI/internal/configs"
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/cespare/xxhash"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/types"
 )

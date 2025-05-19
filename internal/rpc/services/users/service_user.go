@@ -124,7 +124,7 @@ func (this *UserService) CountAllEnabledUsers(ctx context.Context, req *pb.Count
 
 	var tx = this.NullTx()
 
-	count, err := models.SharedUserDAO.CountAllEnabledUsers(tx, 0, req.Keyword, req.IsVerifying)
+	count, err := models.SharedUserDAO.CountAllEnabledUsers(tx, 0, req.Keyword, req.IsVerifying, req.MobileIsVerified)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (this *UserService) ListEnabledUsers(ctx context.Context, req *pb.ListEnabl
 
 	var tx = this.NullTx()
 
-	users, err := models.SharedUserDAO.ListEnabledUsers(tx, 0, req.Keyword, req.IsVerifying, req.Offset, req.Size)
+	users, err := models.SharedUserDAO.ListEnabledUsers(tx, 0, req.Keyword, req.IsVerifying, req.MobileIsVerified, req.Offset, req.Size)
 	if err != nil {
 		return nil, err
 	}
@@ -161,19 +161,20 @@ func (this *UserService) ListEnabledUsers(ctx context.Context, req *pb.ListEnabl
 		}
 
 		result = append(result, &pb.User{
-			Id:           int64(user.Id),
-			Username:     user.Username,
-			Fullname:     user.Fullname,
-			Mobile:       user.Mobile,
-			Tel:          user.Tel,
-			Email:        user.Email,
-			Remark:       user.Remark,
-			IsOn:         user.IsOn,
-			RegisteredIP: user.RegisteredIP,
-			IsVerified:   user.IsVerified,
-			IsRejected:   user.IsRejected,
-			CreatedAt:    int64(user.CreatedAt),
-			NodeCluster:  pbCluster,
+			Id:             int64(user.Id),
+			Username:       user.Username,
+			Fullname:       user.Fullname,
+			Mobile:         user.Mobile,
+			VerifiedMobile: user.VerifiedMobile,
+			Tel:            user.Tel,
+			Email:          user.Email,
+			Remark:         user.Remark,
+			IsOn:           user.IsOn,
+			RegisteredIP:   user.RegisteredIP,
+			IsVerified:     user.IsVerified,
+			IsRejected:     user.IsRejected,
+			CreatedAt:      int64(user.CreatedAt),
+			NodeCluster:    pbCluster,
 		})
 	}
 
@@ -294,7 +295,11 @@ func (this *UserService) CheckUserUsername(ctx context.Context, req *pb.CheckUse
 func (this *UserService) LoginUser(ctx context.Context, req *pb.LoginUserRequest) (*pb.LoginUserResponse, error) {
 	_, err := this.ValidateUserNode(ctx, false)
 	if err != nil {
-		return nil, err
+		// 允许管理员调用此接口
+		_, err = this.ValidateAdmin(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if !teaconst.IsPlus {
@@ -643,7 +648,7 @@ func (this *UserService) ComposeUserGlobalBoard(ctx context.Context, req *pb.Com
 
 	var result = &pb.ComposeUserGlobalBoardResponse{}
 	var tx = this.NullTx()
-	totalUsers, err := models.SharedUserDAO.CountAllEnabledUsers(tx, 0, "", false)
+	totalUsers, err := models.SharedUserDAO.CountAllEnabledUsers(tx, 0, "", false, -1)
 	if err != nil {
 		return nil, err
 	}
