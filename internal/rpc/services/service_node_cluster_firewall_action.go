@@ -3,19 +3,20 @@ package services
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/maps"
 )
 
-// 防火墙动作服务
+// NodeClusterFirewallActionService 防火墙动作服务
 type NodeClusterFirewallActionService struct {
 	BaseService
 }
 
-// 创建动作
+// CreateNodeClusterFirewallAction 创建动作
 func (this *NodeClusterFirewallActionService) CreateNodeClusterFirewallAction(ctx context.Context, req *pb.CreateNodeClusterFirewallActionRequest) (*pb.NodeClusterFirewallActionResponse, error) {
-	adminId, err := this.ValidateAdmin(ctx, 0)
+	adminId, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -36,9 +37,9 @@ func (this *NodeClusterFirewallActionService) CreateNodeClusterFirewallAction(ct
 	return &pb.NodeClusterFirewallActionResponse{NodeClusterFirewallActionId: actionId}, nil
 }
 
-// 修改动作
+// UpdateNodeClusterFirewallAction 修改动作
 func (this *NodeClusterFirewallActionService) UpdateNodeClusterFirewallAction(ctx context.Context, req *pb.UpdateNodeClusterFirewallActionRequest) (*pb.RPCSuccess, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -59,9 +60,9 @@ func (this *NodeClusterFirewallActionService) UpdateNodeClusterFirewallAction(ct
 	return this.Success()
 }
 
-// 删除动作
+// DeleteNodeClusterFirewallAction 删除动作
 func (this *NodeClusterFirewallActionService) DeleteNodeClusterFirewallAction(ctx context.Context, req *pb.DeleteNodeClusterFirewallActionRequest) (*pb.RPCSuccess, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -74,15 +75,15 @@ func (this *NodeClusterFirewallActionService) DeleteNodeClusterFirewallAction(ct
 	return this.Success()
 }
 
-// 查询集群的所有动作
+// FindAllEnabledNodeClusterFirewallActions 查询集群的所有动作
 func (this *NodeClusterFirewallActionService) FindAllEnabledNodeClusterFirewallActions(ctx context.Context, req *pb.FindAllEnabledNodeClusterFirewallActionsRequest) (*pb.FindAllEnabledNodeClusterFirewallActionsResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	var tx = this.NullTx()
-	actions, err := models.SharedNodeClusterFirewallActionDAO.FindAllEnabledFirewallActions(tx, req.NodeClusterId)
+	actions, err := models.SharedNodeClusterFirewallActionDAO.FindAllEnabledFirewallActions(tx, req.NodeClusterId, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -94,15 +95,15 @@ func (this *NodeClusterFirewallActionService) FindAllEnabledNodeClusterFirewallA
 			Name:          action.Name,
 			EventLevel:    action.EventLevel,
 			Type:          action.Type,
-			ParamsJSON:    []byte(action.Params),
+			ParamsJSON:    action.Params,
 		})
 	}
 	return &pb.FindAllEnabledNodeClusterFirewallActionsResponse{NodeClusterFirewallActions: pbActions}, nil
 }
 
-// 查询单个动作
+// FindEnabledNodeClusterFirewallAction 查询单个动作
 func (this *NodeClusterFirewallActionService) FindEnabledNodeClusterFirewallAction(ctx context.Context, req *pb.FindEnabledNodeClusterFirewallActionRequest) (*pb.FindEnabledNodeClusterFirewallActionResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -121,13 +122,13 @@ func (this *NodeClusterFirewallActionService) FindEnabledNodeClusterFirewallActi
 		Name:          action.Name,
 		EventLevel:    action.EventLevel,
 		Type:          action.Type,
-		ParamsJSON:    []byte(action.Params),
+		ParamsJSON:    action.Params,
 	}}, nil
 }
 
-// 计算动作数量
+// CountAllEnabledNodeClusterFirewallActions 计算动作数量
 func (this *NodeClusterFirewallActionService) CountAllEnabledNodeClusterFirewallActions(ctx context.Context, req *pb.CountAllEnabledNodeClusterFirewallActionsRequest) (*pb.RPCCountResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}

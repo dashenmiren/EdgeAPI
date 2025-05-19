@@ -1,55 +1,75 @@
 package acme
 
 import (
+	"fmt"
+	"os"
+	"strings"
+	"sync"
+
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/go-acme/lego/v4/challenge/dns01"
-	"strings"
+	"github.com/iwind/TeaGo/lists"
 )
 
 type DNSProvider struct {
-	raw dnsclients.ProviderInterface
+	raw       dnsclients.ProviderInterface
+	dnsDomain string
+
+	locker             sync.Mutex
+	deletedRecordNames []string
 }
 
-func NewDNSProvider(raw dnsclients.ProviderInterface) *DNSProvider {
-	return &DNSProvider{raw: raw}
+func NewDNSProvider(raw dnsclients.ProviderInterface, dnsDomain string) *DNSProvider {
+	return &DNSProvider{
+		raw:       raw,
+		dnsDomain: dnsDomain,
+	}
 }
 
 func (this *DNSProvider) Present(domain, token, keyAuth string) error {
+	_ = os.Setenv("LEGO_DISABLE_CNAME_SUPPORT", "true")
 	fqdn, value := dns01.GetRecord(domain, keyAuth)
 
 	// 设置记录
-	index := strings.Index(fqdn, "."+domain)
+	var index = strings.Index(fqdn, "."+this.dnsDomain)
 	if index < 0 {
 		return errors.New("invalid fqdn value")
 	}
-	recordName := fqdn[:index]
-	record, err := this.raw.QueryRecord(domain, recordName, dnstypes.RecordTypeTXT)
-	if err != nil {
-		return errors.New("query DNS record failed: " + err.Error())
+	var recordName = fqdn[:index]
+
+	// 先删除老的
+	this.locker.Lock()
+	var wasDeleted = lists.ContainsString(this.deletedRecordNames, recordName)
+	this.locker.Unlock()
+
+	if !wasDeleted {
+		records, err := this.raw.QueryRecords(this.dnsDomain, recordName, dnstypes.RecordTypeTXT)
+		if err != nil {
+			return fmt.Errorf("query DNS record failed: %w", err)
+		}
+		for _, record := range records {
+			err = this.raw.DeleteRecord(this.dnsDomain, record)
+			if err != nil {
+				return err
+			}
+		}
+		this.locker.Lock()
+		this.deletedRecordNames = append(this.deletedRecordNames, recordName)
+		this.locker.Unlock()
 	}
-	if record == nil {
-		err = this.raw.AddRecord(domain, &dnstypes.Record{
-			Id:    "",
-			Name:  recordName,
-			Type:  dnstypes.RecordTypeTXT,
-			Value: value,
-			Route: this.raw.DefaultRoute(),
-		})
-		if err != nil {
-			return errors.New("create DNS record failed: " + err.Error())
-		}
-	} else {
-		err = this.raw.UpdateRecord(domain, record, &dnstypes.Record{
-			Name:  recordName,
-			Type:  dnstypes.RecordTypeTXT,
-			Value: value,
-			Route: this.raw.DefaultRoute(),
-		})
-		if err != nil {
-			return errors.New("update DNS record failed: " + err.Error())
-		}
+
+	// 添加新的
+	err := this.raw.AddRecord(this.dnsDomain, &dnstypes.Record{
+		Id:    "",
+		Name:  recordName,
+		Type:  dnstypes.RecordTypeTXT,
+		Value: value,
+		Route: this.raw.DefaultRoute(),
+	})
+	if err != nil {
+		return fmt.Errorf("create DNS record failed: %w", err)
 	}
 
 	return nil

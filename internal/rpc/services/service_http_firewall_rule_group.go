@@ -3,19 +3,22 @@ package services
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
 )
 
-// WAF规则分组相关服务
+// HTTPFirewallRuleGroupService WAF规则分组相关服务
 type HTTPFirewallRuleGroupService struct {
 	BaseService
 }
 
-// 设置是否启用分组
+// UpdateHTTPFirewallRuleGroupIsOn 设置是否启用分组
 func (this *HTTPFirewallRuleGroupService) UpdateHTTPFirewallRuleGroupIsOn(ctx context.Context, req *pb.UpdateHTTPFirewallRuleGroupIsOnRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +31,7 @@ func (this *HTTPFirewallRuleGroupService) UpdateHTTPFirewallRuleGroupIsOn(ctx co
 		}
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	err = models.SharedHTTPFirewallRuleGroupDAO.UpdateGroupIsOn(tx, req.FirewallRuleGroupId, req.IsOn)
 	if err != nil {
@@ -38,27 +41,27 @@ func (this *HTTPFirewallRuleGroupService) UpdateHTTPFirewallRuleGroupIsOn(ctx co
 	return this.Success()
 }
 
-// 创建分组
+// CreateHTTPFirewallRuleGroup 创建分组
 func (this *HTTPFirewallRuleGroupService) CreateHTTPFirewallRuleGroup(ctx context.Context, req *pb.CreateHTTPFirewallRuleGroupRequest) (*pb.CreateHTTPFirewallRuleGroupResponse, error) {
 	// 校验请求
-	_, _, err := this.ValidateAdminAndUser(ctx, 0, 0)
+	_, _, err := this.ValidateAdminAndUser(ctx, true)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	groupId, err := models.SharedHTTPFirewallRuleGroupDAO.CreateGroup(tx, req.IsOn, req.Name, req.Description)
+	groupId, err := models.SharedHTTPFirewallRuleGroupDAO.CreateGroup(tx, req.IsOn, req.Name, req.Code, req.Description)
 	if err != nil {
 		return nil, err
 	}
 	return &pb.CreateHTTPFirewallRuleGroupResponse{FirewallRuleGroupId: groupId}, nil
 }
 
-// 修改分组
+// UpdateHTTPFirewallRuleGroup 修改分组
 func (this *HTTPFirewallRuleGroupService) UpdateHTTPFirewallRuleGroup(ctx context.Context, req *pb.UpdateHTTPFirewallRuleGroupRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -71,9 +74,9 @@ func (this *HTTPFirewallRuleGroupService) UpdateHTTPFirewallRuleGroup(ctx contex
 		}
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	err = models.SharedHTTPFirewallRuleGroupDAO.UpdateGroup(tx, req.FirewallRuleGroupId, req.IsOn, req.Name, req.Description)
+	err = models.SharedHTTPFirewallRuleGroupDAO.UpdateGroup(tx, req.FirewallRuleGroupId, req.IsOn, req.Name, req.Code, req.Description)
 	if err != nil {
 		return nil, err
 	}
@@ -81,10 +84,10 @@ func (this *HTTPFirewallRuleGroupService) UpdateHTTPFirewallRuleGroup(ctx contex
 	return this.Success()
 }
 
-// 获取分组配置
+// FindEnabledHTTPFirewallRuleGroupConfig 获取分组配置
 func (this *HTTPFirewallRuleGroupService) FindEnabledHTTPFirewallRuleGroupConfig(ctx context.Context, req *pb.FindEnabledHTTPFirewallRuleGroupConfigRequest) (*pb.FindEnabledHTTPFirewallRuleGroupConfigResponse, error) {
 	// 校验请求
-	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -97,9 +100,9 @@ func (this *HTTPFirewallRuleGroupService) FindEnabledHTTPFirewallRuleGroupConfig
 		}
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	groupConfig, err := models.SharedHTTPFirewallRuleGroupDAO.ComposeFirewallRuleGroup(tx, req.FirewallRuleGroupId)
+	groupConfig, err := models.SharedHTTPFirewallRuleGroupDAO.ComposeFirewallRuleGroup(tx, req.FirewallRuleGroupId, false)
 	if err != nil {
 		return nil, err
 	}
@@ -113,10 +116,10 @@ func (this *HTTPFirewallRuleGroupService) FindEnabledHTTPFirewallRuleGroupConfig
 	return &pb.FindEnabledHTTPFirewallRuleGroupConfigResponse{FirewallRuleGroupJSON: groupConfigJSON}, nil
 }
 
-// 获取分组信息
+// FindEnabledHTTPFirewallRuleGroup 获取分组信息
 func (this *HTTPFirewallRuleGroupService) FindEnabledHTTPFirewallRuleGroup(ctx context.Context, req *pb.FindEnabledHTTPFirewallRuleGroupRequest) (*pb.FindEnabledHTTPFirewallRuleGroupResponse, error) {
 	// 校验请求
-	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +132,7 @@ func (this *HTTPFirewallRuleGroupService) FindEnabledHTTPFirewallRuleGroup(ctx c
 		}
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	group, err := models.SharedHTTPFirewallRuleGroupDAO.FindEnabledHTTPFirewallRuleGroup(tx, req.FirewallRuleGroupId)
 	if err != nil {
@@ -145,17 +148,17 @@ func (this *HTTPFirewallRuleGroupService) FindEnabledHTTPFirewallRuleGroup(ctx c
 		FirewallRuleGroup: &pb.HTTPFirewallRuleGroup{
 			Id:          int64(group.Id),
 			Name:        group.Name,
-			IsOn:        group.IsOn == 1,
+			IsOn:        group.IsOn,
 			Description: group.Description,
 			Code:        group.Code,
 		},
 	}, nil
 }
 
-// 修改分组的规则集
+// UpdateHTTPFirewallRuleGroupSets 修改分组的规则集
 func (this *HTTPFirewallRuleGroupService) UpdateHTTPFirewallRuleGroupSets(ctx context.Context, req *pb.UpdateHTTPFirewallRuleGroupSetsRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -167,10 +170,72 @@ func (this *HTTPFirewallRuleGroupService) UpdateHTTPFirewallRuleGroupSets(ctx co
 			return nil, err
 		}
 	}
-	
-	tx := this.NullTx()
+
+	var tx = this.NullTx()
 
 	err = models.SharedHTTPFirewallRuleGroupDAO.UpdateGroupSets(tx, req.GetFirewallRuleGroupId(), req.FirewallRuleSetsJSON)
+	if err != nil {
+		return nil, err
+	}
+	return this.Success()
+}
+
+// AddHTTPFirewallRuleGroupSet 添加规则集
+func (this *HTTPFirewallRuleGroupService) AddHTTPFirewallRuleGroupSet(ctx context.Context, req *pb.AddHTTPFirewallRuleGroupSetRequest) (*pb.RPCSuccess, error) {
+	// 校验请求
+	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+
+	if userId > 0 {
+		// 校验权限
+		err = models.SharedHTTPFirewallRuleGroupDAO.CheckUserRuleGroup(nil, userId, req.FirewallRuleGroupId)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var tx = this.NullTx()
+
+	// 已经有的规则
+	config, err := models.SharedHTTPFirewallRuleGroupDAO.ComposeFirewallRuleGroup(tx, req.FirewallRuleGroupId, false)
+	if err != nil {
+		return nil, err
+	}
+	if config == nil {
+		return nil, errors.New("can not find group")
+	}
+	var setRefs = config.SetRefs
+
+	var set = &firewallconfigs.HTTPFirewallRuleSet{}
+	err = json.Unmarshal(req.FirewallRuleSetConfigJSON, set)
+	if err != nil {
+		return nil, err
+	}
+
+	if set.Id > 0 {
+		setRefs = append(setRefs, &firewallconfigs.HTTPFirewallRuleSetRef{
+			IsOn:  true,
+			SetId: set.Id,
+		})
+	} else {
+		setId, err := models.SharedHTTPFirewallRuleSetDAO.CreateOrUpdateSetFromConfig(tx, set)
+		if err != nil {
+			return nil, err
+		}
+		setRefs = append(setRefs, &firewallconfigs.HTTPFirewallRuleSetRef{
+			IsOn:  true,
+			SetId: setId,
+		})
+	}
+
+	setRefsJSON, err := json.Marshal(setRefs)
+	if err != nil {
+		return nil, err
+	}
+
+	err = models.SharedHTTPFirewallRuleGroupDAO.UpdateGroupSets(tx, req.FirewallRuleGroupId, setRefsJSON)
 	if err != nil {
 		return nil, err
 	}

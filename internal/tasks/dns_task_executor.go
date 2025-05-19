@@ -2,65 +2,78 @@ package tasks
 
 import (
 	"encoding/json"
+	"net"
+	"strings"
+	"time"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	dnsmodels "github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
+	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
-	"net"
-	"strings"
-	"time"
 )
 
 func init() {
 	dbs.OnReadyDone(func() {
-		go NewDNSTaskExecutor().Start()
+		goman.New(func() {
+			NewDNSTaskExecutor(20 * time.Second).Start()
+		})
 	})
 }
 
 // DNSTaskExecutor DNS任务执行器
 type DNSTaskExecutor struct {
+	BaseTask
+
+	ticker *time.Ticker
 }
 
-func NewDNSTaskExecutor() *DNSTaskExecutor {
-	return &DNSTaskExecutor{}
+func NewDNSTaskExecutor(duration time.Duration) *DNSTaskExecutor {
+	return &DNSTaskExecutor{
+		ticker: time.NewTicker(duration),
+	}
 }
 
 func (this *DNSTaskExecutor) Start() {
-	ticker := time.NewTicker(10 * time.Second)
-	for range ticker.C {
-		err := this.LoopWithLocker(10)
+	for {
+		select {
+		case <-this.ticker.C:
+		case <-dnsmodels.DNSTasksNotifier:
+			time.Sleep(3 * time.Second) // 人为延长N秒，等待可能的几个任务合并
+		}
+
+		err := this.Loop()
 		if err != nil {
-			remotelogs.Error("DNSTaskExecutor", err.Error())
+			this.logErr("DNSTaskExecutor", err.Error())
 		}
 	}
 }
 
-func (this *DNSTaskExecutor) LoopWithLocker(seconds int64) error {
-	ok, err := models.SharedSysLockerDAO.Lock(nil, "dns_task_executor", seconds-1) // 假设执行时间为1秒
-	if err != nil {
-		return err
-	}
-	if !ok {
+func (this *DNSTaskExecutor) Loop() error {
+	if !this.IsPrimaryNode() {
 		return nil
 	}
-	return this.Loop()
+
+	return this.loop()
 }
 
-func (this *DNSTaskExecutor) Loop() error {
+func (this *DNSTaskExecutor) loop() error {
 	tasks, err := dnsmodels.SharedDNSTaskDAO.FindAllDoingTasks(nil)
 	if err != nil {
 		return err
 	}
+
 	for _, task := range tasks {
-		taskId := int64(task.Id)
+		var taskId = int64(task.Id)
+		var taskVersion = int64(task.Version)
 		switch task.Type {
 		case dnsmodels.DNSTaskTypeServerChange:
-			err = this.doServer(taskId, int64(task.ServerId))
+			err = this.doServer(taskId, int64(task.Version), int64(task.ClusterId), int64(task.ServerId))
 			if err != nil {
 				err = dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskError(nil, taskId, err.Error())
 				if err != nil {
@@ -68,15 +81,23 @@ func (this *DNSTaskExecutor) Loop() error {
 				}
 			}
 		case dnsmodels.DNSTaskTypeNodeChange:
-			err = this.doNode(taskId, int64(task.NodeId))
+			err = this.doNode(taskId, taskVersion, int64(task.ClusterId), int64(task.NodeId))
 			if err != nil {
 				err = dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskError(nil, taskId, err.Error())
 				if err != nil {
 					return err
 				}
 			}
-		case dnsmodels.DNSTaskTypeClusterChange:
-			err = this.doCluster(taskId, int64(task.ClusterId))
+		case dnsmodels.DNSTaskTypeClusterChange, dnsmodels.DNSTaskTypeClusterNodesChange:
+			err = this.doCluster(taskId, taskVersion, int64(task.ClusterId), task.Type == dnsmodels.DNSTaskTypeClusterNodesChange)
+			if err != nil {
+				err = dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskError(nil, taskId, err.Error())
+				if err != nil {
+					return err
+				}
+			}
+		case dnsmodels.DNSTaskTypeClusterRemoveDomain:
+			err = this.doClusterRemove(taskId, taskVersion, int64(task.ClusterId), int64(task.DomainId), task.RecordName)
 			if err != nil {
 				err = dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskError(nil, taskId, err.Error())
 				if err != nil {
@@ -84,7 +105,7 @@ func (this *DNSTaskExecutor) Loop() error {
 				}
 			}
 		case dnsmodels.DNSTaskTypeDomainChange:
-			err = this.doDomain(taskId, int64(task.DomainId))
+			err = this.doDomainWithTask(taskId, taskVersion, int64(task.DomainId))
 			if err != nil {
 				err = dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskError(nil, taskId, err.Error())
 				if err != nil {
@@ -98,15 +119,15 @@ func (this *DNSTaskExecutor) Loop() error {
 }
 
 // 修改服务相关记录
-func (this *DNSTaskExecutor) doServer(taskId int64, serverId int64) error {
+func (this *DNSTaskExecutor) doServer(taskId int64, taskVersion int64, oldClusterId int64, serverId int64) error {
 	var tx *dbs.Tx
 
-	isOk := false
+	var isOk = false
 	defer func() {
 		if isOk {
-			err := dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskDone(tx, taskId)
+			err := dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskDone(tx, taskId, taskVersion)
 			if err != nil {
-				remotelogs.Error("DNSTaskExecutor", err.Error())
+				this.logErr("DNSTaskExecutor", err.Error())
 			}
 		}
 	}()
@@ -125,20 +146,63 @@ func (this *DNSTaskExecutor) doServer(taskId int64, serverId int64) error {
 		return nil
 	}
 
-	manager, domainId, domain, clusterDNSName, err := this.findDNSManager(tx, int64(serverDNS.ClusterId))
+	var recordName = serverDNS.DnsName
+	var recordType = dnstypes.RecordTypeCNAME
+
+	// 新的DNS设置
+	manager, newDomainId, domain, clusterDNSName, dnsConfig, err := this.findDNSManagerWithClusterId(tx, int64(serverDNS.ClusterId))
 	if err != nil {
 		return err
 	}
-	if manager == nil {
+
+	// 如果集群发生了变化，则从老的集群中删除
+	if oldClusterId > 0 && int64(serverDNS.ClusterId) != oldClusterId {
+		oldManager, oldDomainId, oldDomain, _, _, err := this.findDNSManagerWithClusterId(tx, oldClusterId)
+		if err != nil {
+			return err
+		}
+
+		// 如果域名发生了变化
+		if oldDomainId != newDomainId {
+			if oldManager != nil {
+				oldRecord, err := oldManager.QueryRecord(oldDomain, recordName, recordType)
+				if err != nil {
+					return err
+				}
+				if oldRecord != nil {
+					// 删除记录
+					err = oldManager.DeleteRecord(oldDomain, oldRecord)
+					if err != nil {
+						return err
+					}
+
+					// 更新域名中记录缓存
+					// 这里不创建域名更新任务，而是直接更新，避免影响其他任务的执行
+					err = this.doDomain(oldDomainId)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+
 		isOk = true
 		return nil
 	}
 
-	recordName := serverDNS.DnsName
+	// 处理新的集群
+	if manager == nil {
+		isOk = true
+		return nil
+	}
+	var ttl int32 = 0
+	if dnsConfig != nil {
+		ttl = dnsConfig.TTL
+	}
+
 	recordValue := clusterDNSName + "." + domain + "."
 	recordRoute := manager.DefaultRoute()
-	recordType := dnstypes.RecordTypeCNAME
-	if serverDNS.State == models.ServerStateDisabled || serverDNS.IsOn == 0 {
+	if serverDNS.State == models.ServerStateDisabled || !serverDNS.IsOn {
 		// 检查记录是否已经存在
 		record, err := manager.QueryRecord(domain, recordName, recordType)
 		if err != nil {
@@ -150,7 +214,7 @@ func (this *DNSTaskExecutor) doServer(taskId int64, serverId int64) error {
 			if err != nil {
 				return err
 			}
-			err = dnsmodels.SharedDNSTaskDAO.CreateDomainTask(tx, domainId, dnsmodels.DNSTaskTypeDomainChange)
+			err = dnsmodels.SharedDNSTaskDAO.CreateDomainTask(tx, newDomainId, dnsmodels.DNSTaskTypeDomainChange)
 			if err != nil {
 				return err
 			}
@@ -159,7 +223,7 @@ func (this *DNSTaskExecutor) doServer(taskId int64, serverId int64) error {
 		isOk = true
 	} else {
 		// 是否已存在
-		exist, err := dnsmodels.SharedDNSDomainDAO.ExistDomainRecord(tx, domainId, recordName, recordType, recordRoute, recordValue)
+		exist, err := dnsmodels.SharedDNSDomainDAO.ExistDomainRecord(tx, newDomainId, recordName, recordType, recordRoute, recordValue)
 		if err != nil {
 			return err
 		}
@@ -184,7 +248,7 @@ func (this *DNSTaskExecutor) doServer(taskId int64, serverId int64) error {
 			if err != nil {
 				return err
 			}
-			err = dnsmodels.SharedDNSTaskDAO.CreateDomainTask(tx, domainId, dnsmodels.DNSTaskTypeDomainChange)
+			err = dnsmodels.SharedDNSTaskDAO.CreateDomainTask(tx, newDomainId, dnsmodels.DNSTaskTypeDomainChange)
 			if err != nil {
 				return err
 			}
@@ -196,12 +260,13 @@ func (this *DNSTaskExecutor) doServer(taskId int64, serverId int64) error {
 			Type:  recordType,
 			Value: recordValue,
 			Route: recordRoute,
+			TTL:   ttl,
 		})
 		if err != nil {
 			return err
 		}
 
-		err = dnsmodels.SharedDNSTaskDAO.CreateDomainTask(tx, domainId, dnsmodels.DNSTaskTypeDomainChange)
+		err = dnsmodels.SharedDNSTaskDAO.CreateDomainTask(tx, newDomainId, dnsmodels.DNSTaskTypeDomainChange)
 		if err != nil {
 			return err
 		}
@@ -213,13 +278,13 @@ func (this *DNSTaskExecutor) doServer(taskId int64, serverId int64) error {
 }
 
 // 修改节点相关记录
-func (this *DNSTaskExecutor) doNode(taskId int64, nodeId int64) error {
-	isOk := false
+func (this *DNSTaskExecutor) doNode(taskId int64, taskVersion int64, nodeClusterId int64, nodeId int64) error {
+	var isOk = false
 	defer func() {
 		if isOk {
-			err := dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskDone(nil, taskId)
+			err := dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskDone(nil, taskId, taskVersion)
 			if err != nil {
-				remotelogs.Error("DNSTaskExecutor", err.Error())
+				this.logErr("DNSTaskExecutor", err.Error())
 			}
 		}
 	}()
@@ -234,15 +299,23 @@ func (this *DNSTaskExecutor) doNode(taskId int64, nodeId int64) error {
 		return nil
 	}
 
-	if node.ClusterId == 0 {
-		isOk = true
-		return nil
-	}
-
 	// 转交给cluster统一处理
-	err = dnsmodels.SharedDNSTaskDAO.CreateClusterTask(tx, int64(node.ClusterId), dnsmodels.DNSTaskTypeClusterChange)
-	if err != nil {
-		return err
+	if nodeClusterId > 0 {
+		err = dnsmodels.SharedDNSTaskDAO.CreateClusterTask(tx, nodeClusterId, dnsmodels.DNSTaskTypeClusterNodesChange)
+		if err != nil {
+			return err
+		}
+	} else {
+		clusterIds, err := models.SharedNodeDAO.FindEnabledAndOnNodeClusterIds(tx, nodeId)
+		if err != nil {
+			return err
+		}
+		for _, clusterId := range clusterIds {
+			err = dnsmodels.SharedDNSTaskDAO.CreateClusterTask(tx, clusterId, dnsmodels.DNSTaskTypeClusterNodesChange)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	isOk = true
@@ -251,19 +324,19 @@ func (this *DNSTaskExecutor) doNode(taskId int64, nodeId int64) error {
 }
 
 // 修改集群相关记录
-func (this *DNSTaskExecutor) doCluster(taskId int64, clusterId int64) error {
-	isOk := false
+func (this *DNSTaskExecutor) doCluster(taskId int64, taskVersion int64, clusterId int64, nodesOnly bool) error {
+	var isOk = false
 	defer func() {
 		if isOk {
-			err := dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskDone(nil, taskId)
+			err := dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskDone(nil, taskId, taskVersion)
 			if err != nil {
-				remotelogs.Error("DNSTaskExecutor", err.Error())
+				this.logErr("DNSTaskExecutor", err.Error())
 			}
 		}
 	}()
 
 	var tx *dbs.Tx
-	manager, domainId, domain, clusterDNSName, err := this.findDNSManager(tx, clusterId)
+	manager, domainId, domain, clusterDNSName, dnsConfig, err := this.findDNSManagerWithClusterId(tx, clusterId)
 	if err != nil {
 		return err
 	}
@@ -272,27 +345,48 @@ func (this *DNSTaskExecutor) doCluster(taskId int64, clusterId int64) error {
 		return nil
 	}
 
+	var clusterDomain = clusterDNSName + "." + domain
+
+	var ttl int32 = 0
+	if dnsConfig != nil {
+		ttl = dnsConfig.TTL
+	}
+
 	// 以前的节点记录
 	records, err := manager.GetRecords(domain)
 	if err != nil {
 		return err
 	}
-	oldRecordsMap := map[string]*dnstypes.Record{} // route@value => record
+	var oldRecordsMap = map[string]*dnstypes.Record{}      // route@value => record
+	var oldCnameRecordsMap = map[string]*dnstypes.Record{} // cname => record
 	for _, record := range records {
 		if (record.Type == dnstypes.RecordTypeA || record.Type == dnstypes.RecordTypeAAAA) && record.Name == clusterDNSName {
 			key := record.Route + "@" + record.Value
 			oldRecordsMap[key] = record
 		}
+
+		if record.Type == dnstypes.RecordTypeCNAME {
+			oldCnameRecordsMap[record.Name] = record
+		}
 	}
 
 	// 当前的节点记录
-	newRecordKeys := []string{}
-	nodes, err := models.SharedNodeDAO.FindAllEnabledNodesDNSWithClusterId(tx, clusterId)
+	var newRecordKeys = []string{}
+	nodes, err := models.SharedNodeDAO.FindAllEnabledNodesDNSWithClusterId(tx, clusterId, true, dnsConfig != nil && dnsConfig.IncludingLnNodes, true)
 	if err != nil {
 		return err
 	}
-	isChanged := false
+	var isChanged = false
+	var addingNodeRecordKeysMap = map[string]bool{} // clusterDnsName_type_ip_route
 	for _, node := range nodes {
+		shouldSkip, shouldOverwrite, ipAddressesStrings, err := models.SharedNodeDAO.CheckNodeIPAddresses(tx, node)
+		if err != nil {
+			return err
+		}
+		if shouldSkip {
+			continue
+		}
+
 		routes, err := node.DNSRouteCodesForDomainId(domainId)
 		if err != nil {
 			return err
@@ -302,39 +396,63 @@ func (this *DNSTaskExecutor) doCluster(taskId int64, clusterId int64) error {
 		}
 
 		// 所有的IP记录
-		ipAddresses, err := models.SharedNodeIPAddressDAO.FindAllEnabledAddressesWithNode(tx, int64(node.Id), nodeconfigs.NodeRoleNode)
-		if err != nil {
-			return err
+		if !shouldOverwrite {
+			ipAddresses, err := models.SharedNodeIPAddressDAO.FindAllEnabledAddressesWithNode(tx, int64(node.Id), nodeconfigs.NodeRoleNode)
+			if err != nil {
+				return err
+			}
+			if len(ipAddresses) == 0 {
+				continue
+			}
+			for _, ipAddress := range ipAddresses {
+				// 检查专属节点
+				if !ipAddress.IsValidInCluster(clusterId) {
+					continue
+				}
+
+				var ip = ipAddress.DNSIP()
+				if len(ip) == 0 || !ipAddress.CanAccess || !ipAddress.IsUp || !ipAddress.IsOn {
+					continue
+				}
+				if net.ParseIP(ip) == nil {
+					continue
+				}
+				ipAddressesStrings = append(ipAddressesStrings, ip)
+			}
 		}
-		if len(ipAddresses) == 0 {
+
+		if len(ipAddressesStrings) == 0 {
 			continue
 		}
-		for _, ipAddress := range ipAddresses {
-			ip := ipAddress.Ip
-			if len(ip) == 0 || ipAddress.CanAccess == 0 {
-				continue
-			}
-			if net.ParseIP(ip) == nil {
-				continue
-			}
+
+		for _, ip := range ipAddressesStrings {
 			for _, route := range routes {
-				key := route + "@" + ip
+				var key = route + "@" + ip
 				_, ok := oldRecordsMap[key]
 				if ok {
 					newRecordKeys = append(newRecordKeys, key)
 					continue
 				}
 
-				recordType := dnstypes.RecordTypeA
+				var recordType = dnstypes.RecordTypeA
 				if utils.IsIPv6(ip) {
 					recordType = dnstypes.RecordTypeAAAA
 				}
+
+				// 避免添加重复的记录
+				var fullKey = clusterDNSName + "_" + recordType + "_" + ip + "_" + route
+				if addingNodeRecordKeysMap[fullKey] {
+					continue
+				}
+				addingNodeRecordKeysMap[fullKey] = true
+
 				err = manager.AddRecord(domain, &dnstypes.Record{
 					Id:    "",
 					Name:  clusterDNSName,
 					Type:  recordType,
 					Value: ip,
 					Route: route,
+					TTL:   ttl,
 				})
 				if err != nil {
 					return err
@@ -356,6 +474,87 @@ func (this *DNSTaskExecutor) doCluster(taskId int64, clusterId int64) error {
 		}
 	}
 
+	// 服务域名
+	if !nodesOnly {
+		servers, err := models.SharedServerDAO.FindAllServersDNSWithClusterId(tx, clusterId)
+		if err != nil {
+			return err
+		}
+		serverRecords := []*dnstypes.Record{}             // 之所以用数组再存一遍，是因为dnsName可能会重复
+		serverRecordsMap := map[string]*dnstypes.Record{} // dnsName => *Record
+		for _, record := range records {
+			if record.Type == dnstypes.RecordTypeCNAME && record.Value == clusterDomain+"." {
+				serverRecords = append(serverRecords, record)
+				serverRecordsMap[record.Name] = record
+			}
+		}
+
+		// 新增的域名
+		var serverDNSNames = []string{}
+		for _, server := range servers {
+			var dnsName = server.DnsName
+			if len(dnsName) == 0 {
+				continue
+			}
+			serverDNSNames = append(serverDNSNames, dnsName)
+			_, ok := serverRecordsMap[dnsName]
+			if !ok {
+				isChanged = true
+				err = manager.AddRecord(domain, &dnstypes.Record{
+					Id:    "",
+					Name:  dnsName,
+					Type:  dnstypes.RecordTypeCNAME,
+					Value: clusterDomain + ".",
+					Route: "", // 注意这里为空，需要在执行过程中获取默认值
+					TTL:   ttl,
+				})
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// 自动设置的CNAME
+		var cnameRecords = []string{}
+		if dnsConfig != nil {
+			cnameRecords = dnsConfig.CNAMERecords
+		}
+		for _, cnameRecord := range cnameRecords {
+			// 如果记录已存在，则跳过
+			if lists.ContainsString(serverDNSNames, cnameRecord) {
+				continue
+			}
+
+			serverDNSNames = append(serverDNSNames, cnameRecord)
+			_, ok := serverRecordsMap[cnameRecord]
+			if !ok {
+				isChanged = true
+				err = manager.AddRecord(domain, &dnstypes.Record{
+					Id:    "",
+					Name:  cnameRecord,
+					Type:  dnstypes.RecordTypeCNAME,
+					Value: clusterDomain + ".",
+					Route: "", // 注意这里为空，需要在执行过程中获取默认值
+					TTL:   ttl,
+				})
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// 多余的域名
+		for _, record := range serverRecords {
+			if !lists.ContainsString(serverDNSNames, record.Name) {
+				isChanged = true
+				err = manager.DeleteRecord(domain, record)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	// 通知更新域名
 	if isChanged {
 		err = dnsmodels.SharedDNSTaskDAO.CreateDomainTask(tx, domainId, dnsmodels.DNSTaskTypeDomainChange)
@@ -369,20 +568,111 @@ func (this *DNSTaskExecutor) doCluster(taskId int64, clusterId int64) error {
 	return nil
 }
 
-func (this *DNSTaskExecutor) doDomain(taskId int64, domainId int64) error {
-	var tx *dbs.Tx
-
-	isOk := false
+func (this *DNSTaskExecutor) doClusterRemove(taskId int64, taskVersion int64, clusterId int64, domainId int64, dnsName string) error {
+	var isOk = false
 	defer func() {
 		if isOk {
-			err := dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskDone(tx, taskId)
+			err := dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskDone(nil, taskId, taskVersion)
 			if err != nil {
-				remotelogs.Error("DNSTaskExecutor", err.Error())
+				this.logErr("DNSTaskExecutor", err.Error())
 			}
 		}
 	}()
 
-	dnsDomain, err := dnsmodels.SharedDNSDomainDAO.FindEnabledDNSDomain(tx, domainId)
+	var tx *dbs.Tx
+
+	dnsInfo, err := models.SharedNodeClusterDAO.FindClusterDNSInfo(tx, clusterId, nil)
+	if err != nil {
+		return err
+	}
+
+	if len(dnsName) == 0 {
+		if dnsInfo == nil {
+			isOk = true
+			return nil
+		}
+		dnsName = dnsInfo.DnsName
+		if len(dnsName) == 0 {
+			isOk = true
+			return nil
+		}
+	}
+
+	// 再次检查是否正在使用，如果正在使用，则直接返回
+	if dnsInfo != nil && dnsInfo.State == models.NodeClusterStateEnabled /** 尚未被删除 **/ && int64(dnsInfo.DnsDomainId) == domainId && dnsInfo.DnsName == dnsName {
+		isOk = true
+		return nil
+	}
+
+	domain, manager, err := this.findDNSManagerWithDomainId(tx, domainId)
+	if err != nil {
+		return err
+	}
+	if domain == nil {
+		isOk = true
+		return nil
+	}
+	var fullName = dnsName + "." + domain.Name
+
+	records, err := domain.DecodeRecords()
+	if err != nil {
+		return err
+	}
+
+	var isChanged bool
+
+	for _, record := range records {
+		// node A
+		if (record.Type == dnstypes.RecordTypeA || record.Type == dnstypes.RecordTypeAAAA) && record.Name == dnsName {
+			err = manager.DeleteRecord(domain.Name, record)
+			if err != nil {
+				return err
+			}
+			isChanged = true
+		}
+
+		// server CNAME
+		if record.Type == dnstypes.RecordTypeCNAME && strings.TrimRight(record.Value, ".") == fullName {
+			err = manager.DeleteRecord(domain.Name, record)
+			if err != nil {
+				return err
+			}
+			isChanged = true
+		}
+	}
+
+	if isChanged {
+		err = dnsmodels.SharedDNSTaskDAO.CreateDomainTask(tx, domainId, dnsmodels.DNSTaskTypeDomainChange)
+		if err != nil {
+			return err
+		}
+	}
+
+	isOk = true
+
+	return nil
+}
+
+func (this *DNSTaskExecutor) doDomain(domainId int64) error {
+	return this.doDomainWithTask(0, 0, domainId)
+}
+
+func (this *DNSTaskExecutor) doDomainWithTask(taskId int64, taskVersion int64, domainId int64) error {
+	var tx *dbs.Tx
+
+	var isOk = false
+	defer func() {
+		if isOk {
+			if taskId > 0 {
+				err := dnsmodels.SharedDNSTaskDAO.UpdateDNSTaskDone(tx, taskId, taskVersion)
+				if err != nil {
+					this.logErr("DNSTaskExecutor", err.Error())
+				}
+			}
+		}
+	}()
+
+	dnsDomain, err := dnsmodels.SharedDNSDomainDAO.FindEnabledDNSDomain(tx, domainId, nil)
 	if err != nil {
 		return err
 	}
@@ -390,7 +680,7 @@ func (this *DNSTaskExecutor) doDomain(taskId int64, domainId int64) error {
 		isOk = true
 		return nil
 	}
-	providerId := int64(dnsDomain.ProviderId)
+	var providerId = int64(dnsDomain.ProviderId)
 	if providerId <= 0 {
 		isOk = true
 		return nil
@@ -405,9 +695,9 @@ func (this *DNSTaskExecutor) doDomain(taskId int64, domainId int64) error {
 		return nil
 	}
 
-	manager := dnsclients.FindProvider(provider.Type)
+	var manager = dnsclients.FindProvider(provider.Type, int64(provider.Id))
 	if manager == nil {
-		remotelogs.Error("DNSTaskExecutor", "unsupported dns provider type '"+provider.Type+"'")
+		this.logErr("DNSTaskExecutor", "unsupported dns provider type '"+provider.Type+"'")
 		isOk = true
 		return nil
 	}
@@ -435,47 +725,65 @@ func (this *DNSTaskExecutor) doDomain(taskId int64, domainId int64) error {
 	return nil
 }
 
-func (this *DNSTaskExecutor) findDNSManager(tx *dbs.Tx, clusterId int64) (manager dnsclients.ProviderInterface, domainId int64, domain string, clusterDNSName string, err error) {
-	clusterDNS, err := models.SharedNodeClusterDAO.FindClusterDNSInfo(tx, clusterId)
+func (this *DNSTaskExecutor) findDNSManagerWithClusterId(tx *dbs.Tx, clusterId int64) (manager dnsclients.ProviderInterface, domainId int64, domain string, clusterDNSName string, dnsConfig *dnsconfigs.ClusterDNSConfig, err error) {
+	clusterDNS, err := models.SharedNodeClusterDAO.FindClusterDNSInfo(tx, clusterId, nil)
 	if err != nil {
-		return nil, 0, "", "", err
+		return nil, 0, "", "", nil, err
 	}
 	if clusterDNS == nil || len(clusterDNS.DnsName) == 0 || clusterDNS.DnsDomainId <= 0 {
-		return nil, 0, "", "", nil
+		return nil, 0, "", "", nil, nil
 	}
 
-	dnsDomain, err := dnsmodels.SharedDNSDomainDAO.FindEnabledDNSDomain(tx, int64(clusterDNS.DnsDomainId))
+	dnsConfig, err = clusterDNS.DecodeDNSConfig()
 	if err != nil {
-		return nil, 0, "", "", err
+		return nil, 0, "", "", nil, err
+	}
+
+	dnsDomain, manager, err := this.findDNSManagerWithDomainId(tx, int64(clusterDNS.DnsDomainId))
+	if err != nil {
+		return nil, 0, "", "", nil, err
+	}
+
+	if dnsDomain == nil {
+		return nil, 0, "", clusterDNS.DnsName, dnsConfig, nil
+	}
+
+	return manager, int64(dnsDomain.Id), dnsDomain.Name, clusterDNS.DnsName, dnsConfig, nil
+}
+
+func (this *DNSTaskExecutor) findDNSManagerWithDomainId(tx *dbs.Tx, domainId int64) (*dnsmodels.DNSDomain, dnsclients.ProviderInterface, error) {
+	dnsDomain, err := dnsmodels.SharedDNSDomainDAO.FindEnabledDNSDomain(tx, domainId, nil)
+	if err != nil {
+		return nil, nil, err
 	}
 	if dnsDomain == nil {
-		return nil, 0, "", "", nil
+		return nil, nil, nil
 	}
 	providerId := int64(dnsDomain.ProviderId)
 	if providerId <= 0 {
-		return nil, 0, "", "", nil
+		return nil, nil, nil
 	}
 
 	provider, err := dnsmodels.SharedDNSProviderDAO.FindEnabledDNSProvider(tx, providerId)
 	if err != nil {
-		return nil, 0, "", "", err
+		return nil, nil, err
 	}
 	if provider == nil {
-		return nil, 0, "", "", nil
+		return nil, nil, nil
 	}
 
-	manager = dnsclients.FindProvider(provider.Type)
+	var manager = dnsclients.FindProvider(provider.Type, int64(provider.Id))
 	if manager == nil {
-		remotelogs.Error("DNSTaskExecutor", "unsupported dns provider type '"+provider.Type+"'")
-		return nil, 0, "", "", nil
+		this.logErr("DNSTaskExecutor", "unsupported dns provider type '"+provider.Type+"'")
+		return nil, nil, nil
 	}
 	params, err := provider.DecodeAPIParams()
 	if err != nil {
-		return nil, 0, "", "", err
+		return nil, nil, err
 	}
 	err = manager.Auth(params)
 	if err != nil {
-		return nil, 0, "", "", err
+		return nil, nil, err
 	}
-	return manager, int64(dnsDomain.Id), dnsDomain.Name, clusterDNS.DnsName, nil
+	return dnsDomain, manager, nil
 }

@@ -3,6 +3,8 @@ package models
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
 	_ "github.com/go-sql-driver/mysql"
@@ -80,7 +82,16 @@ func (this *ReverseProxyDAO) FindEnabledReverseProxy(tx *dbs.Tx, id int64) (*Rev
 }
 
 // ComposeReverseProxyConfig 根据ID组合配置
-func (this *ReverseProxyDAO) ComposeReverseProxyConfig(tx *dbs.Tx, reverseProxyId int64) (*serverconfigs.ReverseProxyConfig, error) {
+func (this *ReverseProxyDAO) ComposeReverseProxyConfig(tx *dbs.Tx, reverseProxyId int64, dataMap *shared.DataMap, cacheMap *utils.CacheMap) (*serverconfigs.ReverseProxyConfig, error) {
+	if cacheMap == nil {
+		cacheMap = utils.NewCacheMap()
+	}
+	var cacheKey = this.Table + ":config:" + types.String(reverseProxyId)
+	var cache, _ = cacheMap.Get(cacheKey)
+	if cache != nil {
+		return cache.(*serverconfigs.ReverseProxyConfig), nil
+	}
+
 	reverseProxy, err := this.FindEnabledReverseProxy(tx, reverseProxyId)
 	if err != nil {
 		return nil, err
@@ -89,31 +100,35 @@ func (this *ReverseProxyDAO) ComposeReverseProxyConfig(tx *dbs.Tx, reverseProxyI
 		return nil, nil
 	}
 
-	config := &serverconfigs.ReverseProxyConfig{}
+	var config = serverconfigs.NewReverseProxyConfig()
 	config.Id = int64(reverseProxy.Id)
-	config.IsOn = reverseProxy.IsOn == 1
+	config.IsOn = reverseProxy.IsOn
 	config.RequestHostType = types.Int8(reverseProxy.RequestHostType)
 	config.RequestHost = reverseProxy.RequestHost
+	config.RequestHostExcludingPort = reverseProxy.RequestHostExcludingPort
 	config.RequestURI = reverseProxy.RequestURI
 	config.StripPrefix = reverseProxy.StripPrefix
 	config.AutoFlush = reverseProxy.AutoFlush == 1
+	config.FollowRedirects = reverseProxy.FollowRedirects == 1
+	config.Retry50X = reverseProxy.Retry50X
+	config.Retry40X = reverseProxy.Retry40X
 
-	schedulingConfig := &serverconfigs.SchedulingConfig{}
-	if len(reverseProxy.Scheduling) > 0 && reverseProxy.Scheduling != "null" {
-		err = json.Unmarshal([]byte(reverseProxy.Scheduling), schedulingConfig)
+	var schedulingConfig = &serverconfigs.SchedulingConfig{}
+	if IsNotNull(reverseProxy.Scheduling) {
+		err = json.Unmarshal(reverseProxy.Scheduling, schedulingConfig)
 		if err != nil {
 			return nil, err
 		}
 		config.Scheduling = schedulingConfig
 	}
-	if len(reverseProxy.PrimaryOrigins) > 0 && reverseProxy.PrimaryOrigins != "null" {
-		originRefs := []*serverconfigs.OriginRef{}
-		err = json.Unmarshal([]byte(reverseProxy.PrimaryOrigins), &originRefs)
+	if IsNotNull(reverseProxy.PrimaryOrigins) {
+		var originRefs = []*serverconfigs.OriginRef{}
+		err = json.Unmarshal(reverseProxy.PrimaryOrigins, &originRefs)
 		if err != nil {
 			return nil, err
 		}
 		for _, ref := range originRefs {
-			originConfig, err := SharedOriginDAO.ComposeOriginConfig(tx, ref.OriginId)
+			originConfig, err := SharedOriginDAO.ComposeOriginConfig(tx, ref.OriginId, dataMap, cacheMap)
 			if err != nil {
 				return nil, err
 			}
@@ -123,14 +138,14 @@ func (this *ReverseProxyDAO) ComposeReverseProxyConfig(tx *dbs.Tx, reverseProxyI
 		}
 	}
 
-	if len(reverseProxy.BackupOrigins) > 0 && reverseProxy.BackupOrigins != "null" {
-		originRefs := []*serverconfigs.OriginRef{}
-		err = json.Unmarshal([]byte(reverseProxy.BackupOrigins), &originRefs)
+	if IsNotNull(reverseProxy.BackupOrigins) {
+		var originRefs = []*serverconfigs.OriginRef{}
+		err = json.Unmarshal(reverseProxy.BackupOrigins, &originRefs)
 		if err != nil {
 			return nil, err
 		}
-		for _, originConfig := range originRefs {
-			originConfig, err := SharedOriginDAO.ComposeOriginConfig(tx, originConfig.OriginId)
+		for _, ref := range originRefs {
+			originConfig, err := SharedOriginDAO.ComposeOriginConfig(tx, ref.OriginId, dataMap, cacheMap)
 			if err != nil {
 				return nil, err
 			}
@@ -142,8 +157,8 @@ func (this *ReverseProxyDAO) ComposeReverseProxyConfig(tx *dbs.Tx, reverseProxyI
 
 	// add headers
 	if IsNotNull(reverseProxy.AddHeaders) {
-		addHeaders := []string{}
-		err = json.Unmarshal([]byte(reverseProxy.AddHeaders), &addHeaders)
+		var addHeaders = []string{}
+		err = json.Unmarshal(reverseProxy.AddHeaders, &addHeaders)
 		if err != nil {
 			return nil, err
 		}
@@ -155,8 +170,8 @@ func (this *ReverseProxyDAO) ComposeReverseProxyConfig(tx *dbs.Tx, reverseProxyI
 	config.MaxIdleConns = int(reverseProxy.MaxIdleConns)
 
 	if IsNotNull(reverseProxy.ConnTimeout) {
-		connTimeout := &shared.TimeDuration{}
-		err = json.Unmarshal([]byte(reverseProxy.ConnTimeout), &connTimeout)
+		var connTimeout = &shared.TimeDuration{}
+		err = json.Unmarshal(reverseProxy.ConnTimeout, &connTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -164,8 +179,8 @@ func (this *ReverseProxyDAO) ComposeReverseProxyConfig(tx *dbs.Tx, reverseProxyI
 	}
 
 	if IsNotNull(reverseProxy.ReadTimeout) {
-		readTimeout := &shared.TimeDuration{}
-		err = json.Unmarshal([]byte(reverseProxy.ReadTimeout), &readTimeout)
+		var readTimeout = &shared.TimeDuration{}
+		err = json.Unmarshal(reverseProxy.ReadTimeout, &readTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -173,12 +188,26 @@ func (this *ReverseProxyDAO) ComposeReverseProxyConfig(tx *dbs.Tx, reverseProxyI
 	}
 
 	if IsNotNull(reverseProxy.IdleTimeout) {
-		idleTimeout := &shared.TimeDuration{}
-		err = json.Unmarshal([]byte(reverseProxy.IdleTimeout), &idleTimeout)
+		var idleTimeout = &shared.TimeDuration{}
+		err = json.Unmarshal(reverseProxy.IdleTimeout, &idleTimeout)
 		if err != nil {
 			return nil, err
 		}
 		config.IdleTimeout = idleTimeout
+	}
+
+	// PROXY Protocol
+	if IsNotNull(reverseProxy.ProxyProtocol) {
+		var proxyProtocolConfig = &serverconfigs.ProxyProtocolConfig{}
+		err = json.Unmarshal(reverseProxy.ProxyProtocol, proxyProtocolConfig)
+		if err != nil {
+			return nil, err
+		}
+		config.ProxyProtocol = proxyProtocolConfig
+	}
+
+	if cacheMap != nil {
+		cacheMap.Put(cacheKey, config)
 	}
 
 	return config, nil
@@ -186,12 +215,14 @@ func (this *ReverseProxyDAO) ComposeReverseProxyConfig(tx *dbs.Tx, reverseProxyI
 
 // CreateReverseProxy 创建反向代理
 func (this *ReverseProxyDAO) CreateReverseProxy(tx *dbs.Tx, adminId int64, userId int64, schedulingJSON []byte, primaryOriginsJSON []byte, backupOriginsJSON []byte) (int64, error) {
-	op := NewReverseProxyOperator()
+	var op = NewReverseProxyOperator()
 	op.IsOn = true
 	op.State = ReverseProxyStateEnabled
 	op.AdminId = adminId
 	op.UserId = userId
 	op.RequestHostType = serverconfigs.RequestHostTypeProxyServer
+	op.Retry50X = false
+	op.Retry40X = false
 
 	defaultHeaders := []string{"X-Real-IP", "X-Forwarded-For", "X-Forwarded-By", "X-Forwarded-Host", "X-Forwarded-Proto"}
 	defaultHeadersJSON, err := json.Marshal(defaultHeaders)
@@ -200,13 +231,13 @@ func (this *ReverseProxyDAO) CreateReverseProxy(tx *dbs.Tx, adminId int64, userI
 	}
 	op.AddHeaders = defaultHeadersJSON
 
-	if len(schedulingJSON) > 0 {
+	if IsNotNull(schedulingJSON) {
 		op.Scheduling = string(schedulingJSON)
 	}
-	if len(primaryOriginsJSON) > 0 {
+	if IsNotNull(primaryOriginsJSON) {
 		op.PrimaryOrigins = string(primaryOriginsJSON)
 	}
-	if len(backupOriginsJSON) > 0 {
+	if IsNotNull(backupOriginsJSON) {
 		op.BackupOrigins = string(backupOriginsJSON)
 	}
 	err = this.Save(tx, op)
@@ -217,12 +248,121 @@ func (this *ReverseProxyDAO) CreateReverseProxy(tx *dbs.Tx, adminId int64, userI
 	return types.Int64(op.Id), nil
 }
 
+// CloneReverseProxy 复制反向代理
+func (this *ReverseProxyDAO) CloneReverseProxy(tx *dbs.Tx, fromReverseProxyId int64) (newReverseProxyId int64, err error) {
+	if fromReverseProxyId <= 0 {
+		return
+	}
+	reverseProxyOne, err := this.Query(tx).
+		Pk(fromReverseProxyId).
+		State(ReverseProxyStateEnabled).
+		Find()
+	if err != nil || reverseProxyOne == nil {
+		return 0, err
+	}
+	var reverseProxy = reverseProxyOne.(*ReverseProxy)
+	var op = NewReverseProxyOperator()
+	op.TemplateId = reverseProxy.TemplateId
+	op.IsOn = reverseProxy.IsOn
+	if IsNotNull(reverseProxy.Scheduling) {
+		op.Scheduling = reverseProxy.Scheduling
+	}
+	if IsNotNull(reverseProxy.PrimaryOrigins) {
+		var originRefs = []*serverconfigs.OriginRef{}
+		err = json.Unmarshal(reverseProxy.PrimaryOrigins, &originRefs)
+		if err != nil {
+			return 0, err
+		}
+
+		var newRefs = []*serverconfigs.OriginRef{}
+		for _, originRef := range originRefs {
+			if originRef.OriginId > 0 {
+				newOriginId, err := SharedOriginDAO.CloneOrigin(tx, originRef.OriginId)
+				if err != nil {
+					return 0, err
+				}
+				if newOriginId > 0 {
+					newRef, err := utils.JSONClone[*serverconfigs.OriginRef](originRef)
+					if err != nil {
+						return 0, err
+					}
+					newRef.OriginId = newOriginId
+					newRefs = append(newRefs, newRef)
+				}
+			}
+		}
+		newRefsJSON, err := json.Marshal(newRefs)
+		if err != nil {
+			return 0, err
+		}
+		op.PrimaryOrigins = newRefsJSON
+	}
+	if IsNotNull(reverseProxy.BackupOrigins) {
+		var originRefs = []*serverconfigs.OriginRef{}
+		err = json.Unmarshal(reverseProxy.BackupOrigins, &originRefs)
+		if err != nil {
+			return 0, err
+		}
+
+		var newRefs = []*serverconfigs.OriginRef{}
+		for _, originRef := range originRefs {
+			if originRef.OriginId > 0 {
+				newOriginId, err := SharedOriginDAO.CloneOrigin(tx, originRef.OriginId)
+				if err != nil {
+					return 0, err
+				}
+				if newOriginId > 0 {
+					newRef, err := utils.JSONClone[*serverconfigs.OriginRef](originRef)
+					if err != nil {
+						return 0, err
+					}
+					newRef.OriginId = newOriginId
+					newRefs = append(newRefs, newRef)
+				}
+			}
+		}
+		newRefsJSON, err := json.Marshal(newRefs)
+		if err != nil {
+			return 0, err
+		}
+		op.BackupOrigins = newRefsJSON
+	}
+	op.StripPrefix = reverseProxy.StripPrefix
+	op.RequestHostType = reverseProxy.RequestHostType
+	op.RequestHost = reverseProxy.RequestHost
+	op.RequestHostExcludingPort = reverseProxy.RequestHostExcludingPort
+	op.RequestURI = reverseProxy.RequestURI
+	op.AutoFlush = reverseProxy.AutoFlush
+	if IsNotNull(reverseProxy.AddHeaders) {
+		// TODO 复制Header
+		op.AddHeaders = reverseProxy.AddHeaders
+	}
+	op.State = reverseProxy.State
+	if IsNotNull(reverseProxy.ConnTimeout) {
+		op.ConnTimeout = reverseProxy.ConnTimeout
+	}
+	if IsNotNull(reverseProxy.ReadTimeout) {
+		op.ReadTimeout = reverseProxy.ReadTimeout
+	}
+	if IsNotNull(reverseProxy.IdleTimeout) {
+		op.IdleTimeout = reverseProxy.IdleTimeout
+	}
+	op.MaxConns = reverseProxy.MaxConns
+	op.MaxIdleConns = reverseProxy.MaxIdleConns
+	if IsNotNull(reverseProxy.ProxyProtocol) {
+		op.ProxyProtocol = reverseProxy.ProxyProtocol
+	}
+	op.FollowRedirects = reverseProxy.FollowRedirects
+
+	return this.SaveInt64(tx, op)
+}
+
 // UpdateReverseProxyScheduling 修改反向代理调度算法
 func (this *ReverseProxyDAO) UpdateReverseProxyScheduling(tx *dbs.Tx, reverseProxyId int64, schedulingJSON []byte) error {
 	if reverseProxyId <= 0 {
 		return errors.New("invalid reverseProxyId")
 	}
-	op := NewReverseProxyOperator()
+	var op = NewReverseProxyOperator()
 	op.Id = reverseProxyId
 	if len(schedulingJSON) > 0 {
 		op.Scheduling = string(schedulingJSON)
@@ -237,14 +377,14 @@ func (this *ReverseProxyDAO) UpdateReverseProxyScheduling(tx *dbs.Tx, reversePro
 }
 
 // UpdateReverseProxyPrimaryOrigins 修改主要源站
-func (this *ReverseProxyDAO) UpdateReverseProxyPrimaryOrigins(tx *dbs.Tx, reverseProxyId int64, origins []byte) error {
+func (this *ReverseProxyDAO) UpdateReverseProxyPrimaryOrigins(tx *dbs.Tx, reverseProxyId int64, originRefs []byte) error {
 	if reverseProxyId <= 0 {
 		return errors.New("invalid reverseProxyId")
 	}
-	op := NewReverseProxyOperator()
+	var op = NewReverseProxyOperator()
 	op.Id = reverseProxyId
-	if len(origins) > 0 {
-		op.PrimaryOrigins = origins
+	if len(originRefs) > 0 {
+		op.PrimaryOrigins = originRefs
 	} else {
 		op.PrimaryOrigins = "[]"
 	}
@@ -260,7 +400,7 @@ func (this *ReverseProxyDAO) UpdateReverseProxyBackupOrigins(tx *dbs.Tx, reverse
 	if reverseProxyId <= 0 {
 		return errors.New("invalid reverseProxyId")
 	}
-	op := NewReverseProxyOperator()
+	var op = NewReverseProxyOperator()
 	op.Id = reverseProxyId
 	if len(origins) > 0 {
 		op.BackupOrigins = origins
@@ -275,12 +415,29 @@ func (this *ReverseProxyDAO) UpdateReverseProxyBackupOrigins(tx *dbs.Tx, reverse
 }
 
 // UpdateReverseProxy 修改是否启用
-func (this *ReverseProxyDAO) UpdateReverseProxy(tx *dbs.Tx, reverseProxyId int64, requestHostType int8, requestHost string, requestURI string, stripPrefix string, autoFlush bool, addHeaders []string, connTimeout *shared.TimeDuration, readTimeout *shared.TimeDuration, idleTimeout *shared.TimeDuration, maxConns int32, maxIdleConns int32) error {
+func (this *ReverseProxyDAO) UpdateReverseProxy(tx *dbs.Tx,
+	reverseProxyId int64,
+	requestHostType int8,
+	requestHost string,
+	requestHostExcludingPort bool,
+	requestURI string,
+	stripPrefix string,
+	autoFlush bool,
+	addHeaders []string,
+	connTimeout *shared.TimeDuration,
+	readTimeout *shared.TimeDuration,
+	idleTimeout *shared.TimeDuration,
+	maxConns int32,
+	maxIdleConns int32,
+	proxyProtocolJSON []byte,
+	followRedirects bool,
+	retry50X bool,
+	retry40X bool) error {
 	if reverseProxyId <= 0 {
 		return errors.New("invalid reverseProxyId")
 	}
 
-	op := NewReverseProxyOperator()
+	var op = NewReverseProxyOperator()
 	op.Id = reverseProxyId
 
 	if requestHostType < 0 {
@@ -289,9 +446,11 @@ func (this *ReverseProxyDAO) UpdateReverseProxy(tx *dbs.Tx, reverseProxyId int64
 	op.RequestHostType = requestHostType
 
 	op.RequestHost = requestHost
+	op.RequestHostExcludingPort = requestHostExcludingPort
 	op.RequestURI = requestURI
 	op.StripPrefix = stripPrefix
 	op.AutoFlush = autoFlush
+	op.FollowRedirects = followRedirects
 
 	if len(addHeaders) == 0 {
 		addHeaders = []string{}
@@ -333,6 +492,13 @@ func (this *ReverseProxyDAO) UpdateReverseProxy(tx *dbs.Tx, reverseProxyId int64
 	} else {
 		op.MaxIdleConns = 0
 	}
+
+	if len(proxyProtocolJSON) > 0 {
+		op.ProxyProtocol = proxyProtocolJSON
+	}
+
+	op.Retry50X = retry50X
+	op.Retry40X = retry40X
 
 	err = this.Save(tx, op)
 	if err != nil {
@@ -385,5 +551,24 @@ func (this *ReverseProxyDAO) NotifyUpdate(tx *dbs.Tx, reverseProxyId int64) erro
 	if serverId > 0 {
 		return SharedServerDAO.NotifyUpdate(tx, serverId)
 	}
+
+	// locations
+	locationId, err := SharedHTTPLocationDAO.FindEnabledLocationIdWithReverseProxyId(tx, reverseProxyId)
+	if err != nil {
+		return err
+	}
+	if locationId > 0 {
+		return SharedHTTPLocationDAO.NotifyUpdate(tx, locationId)
+	}
+
+	// group
+	groupId, err := SharedServerGroupDAO.FindEnabledGroupIdWithReverseProxyId(tx, reverseProxyId)
+	if err != nil {
+		return err
+	}
+	if groupId > 0 {
+		return SharedServerGroupDAO.NotifyUpdate(tx, groupId)
+	}
+
 	return nil
 }

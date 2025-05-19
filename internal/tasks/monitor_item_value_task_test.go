@@ -1,16 +1,17 @@
-// Copyright 2021 Liuxiangchao iwind.liu@gmail.com. All rights reserved.
-
-package tasks
+package tasks_test
 
 import (
-	"github.com/iwind/TeaGo/dbs"
 	"testing"
+	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/tasks"
+	"github.com/iwind/TeaGo/dbs"
 )
 
 func TestMonitorItemValueTask_Loop(t *testing.T) {
 	dbs.NotifyReady()
 
-	task := NewMonitorItemValueTask()
+	var task = tasks.NewMonitorItemValueTask(1 * time.Minute)
 	err := task.Loop()
 	if err != nil {
 		t.Fatal(err)

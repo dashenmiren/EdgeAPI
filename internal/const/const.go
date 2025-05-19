@@ -1,11 +1,13 @@
 package teaconst
 
 const (
-	Version = "0.2.0"
+	Version = "1.3.4"
 
 	ProductName   = "Edge API"
 	ProcessName   = "edge-api"
 	ProductNameZH = "Edge"
+
+	GlobalProductName = "GoCDN"
 
 	Role = "api"
 
@@ -18,9 +20,8 @@ const (
 
 	// 其他节点版本号，用来检测是否有需要升级的节点
 
-	NodeVersion          = "0.2.0"
-	UserNodeVersion      = "0.0.7"
-	AuthorityNodeVersion = "0.0.1"
-	MonitorNodeVersion   = "0.0.1"
-	DNSNodeVersion       = "0.0.1"
+	NodeVersion = "1.3.4"
+
+	// SQLVersion SQL版本号
+	SQLVersion = "11"
 )

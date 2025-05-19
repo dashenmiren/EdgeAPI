@@ -6,4 +6,7 @@ type Credentials struct {
 	Username   string
 	Password   string
 	PrivateKey string
+	Passphrase string
+	Method     string
+	Sudo       bool
 }

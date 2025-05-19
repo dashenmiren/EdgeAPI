@@ -2,15 +2,17 @@ package dns
 
 import (
 	"encoding/json"
+	"strings"
+	"time"
+
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
-	"strings"
-	"time"
 )
 
 const (
@@ -58,13 +60,24 @@ func (this *DNSDomainDAO) DisableDNSDomain(tx *dbs.Tx, id int64) error {
 }
 
 // FindEnabledDNSDomain 查找启用中的条目
-func (this *DNSDomainDAO) FindEnabledDNSDomain(tx *dbs.Tx, id int64) (*DNSDomain, error) {
+func (this *DNSDomainDAO) FindEnabledDNSDomain(tx *dbs.Tx, domainId int64, cacheMap *utils.CacheMap) (*DNSDomain, error) {
+	var cacheKey = this.Table + ":record:" + types.String(domainId)
+	if cacheMap != nil {
+		cache, _ := cacheMap.Get(cacheKey)
+		if cache != nil {
+			return cache.(*DNSDomain), nil
+		}
+	}
+
 	result, err := this.Query(tx).
-		Pk(id).
+		Pk(domainId).
 		Attr("state", DNSDomainStateEnabled).
 		Find()
 	if result == nil {
 		return nil, err
+	}
+	if cacheMap != nil {
+		cacheMap.Put(cacheKey, result)
 	}
 	return result.(*DNSDomain), err
 }
@@ -79,13 +92,14 @@ func (this *DNSDomainDAO) FindDNSDomainName(tx *dbs.Tx, id int64) (string, error
 
 // CreateDomain 创建域名
 func (this *DNSDomainDAO) CreateDomain(tx *dbs.Tx, adminId int64, userId int64, providerId int64, name string) (int64, error) {
-	op := NewDNSDomainOperator()
+	var op = NewDNSDomainOperator()
 	op.ProviderId = providerId
 	op.AdminId = adminId
 	op.UserId = userId
 	op.Name = name
 	op.State = DNSDomainStateEnabled
 	op.IsOn = true
+	op.IsUp = true
 	err := this.Save(tx, op)
 	if err != nil {
 		return 0, err
@@ -98,7 +112,7 @@ func (this *DNSDomainDAO) UpdateDomain(tx *dbs.Tx, domainId int64, name string, 
 	if domainId <= 0 {
 		return errors.New("invalid domainId")
 	}
-	op := NewDNSDomainOperator()
+	var op = NewDNSDomainOperator()
 	op.Id = domainId
 	op.Name = name
 	op.IsOn = isOn
@@ -120,11 +134,28 @@ func (this *DNSDomainDAO) FindAllEnabledDomainsWithProviderId(tx *dbs.Tx, provid
 	return
 }
 
+// ListDomains 列出单页域名
+func (this *DNSDomainDAO) ListDomains(tx *dbs.Tx, providerId int64, isDeleted bool, isUp bool, offset int64, size int64) (result []*DNSDomain, err error) {
+	_, err = this.Query(tx).
+		State(DNSDomainStateEnabled).
+		Attr("providerId", providerId).
+		Attr("isDeleted", isDeleted).
+		Attr("isUp", isUp).
+		AscPk().
+		Offset(offset).
+		Limit(size).
+		Slice(&result).
+		FindAll()
+	return
+}
+
 // CountAllEnabledDomainsWithProviderId 计算某个服务商下的域名数量
-func (this *DNSDomainDAO) CountAllEnabledDomainsWithProviderId(tx *dbs.Tx, providerId int64) (int64, error) {
+func (this *DNSDomainDAO) CountAllEnabledDomainsWithProviderId(tx *dbs.Tx, providerId int64, isDeleted bool, isUp bool) (int64, error) {
 	return this.Query(tx).
 		State(DNSDomainStateEnabled).
 		Attr("providerId", providerId).
+		Attr("isDeleted", isDeleted).
+		Attr("isUp", isUp).
 		Count()
 }
 
@@ -133,7 +164,7 @@ func (this *DNSDomainDAO) UpdateDomainData(tx *dbs.Tx, domainId int64, data stri
 	if domainId <= 0 {
 		return errors.New("invalid domainId")
 	}
-	op := NewDNSDomainOperator()
+	var op = NewDNSDomainOperator()
 	op.Id = domainId
 	op.Data = data
 	err := this.Save(tx, op)
@@ -145,7 +176,7 @@ func (this *DNSDomainDAO) UpdateDomainRecords(tx *dbs.Tx, domainId int64, record
 	if domainId <= 0 {
 		return errors.New("invalid domainId")
 	}
-	op := NewDNSDomainOperator()
+	var op = NewDNSDomainOperator()
 	op.Id = domainId
 	op.Records = recordsJSON
 	op.DataUpdatedAt = time.Now().Unix()
@@ -158,7 +189,7 @@ func (this *DNSDomainDAO) UpdateDomainRoutes(tx *dbs.Tx, domainId int64, routesJ
 	if domainId <= 0 {
 		return errors.New("invalid domainId")
 	}
-	op := NewDNSDomainOperator()
+	var op = NewDNSDomainOperator()
 	op.Id = domainId
 	op.Routes = routesJSON
 	op.DataUpdatedAt = time.Now().Unix()
@@ -218,6 +249,8 @@ func (this *DNSDomainDAO) ExistAvailableDomains(tx *dbs.Tx) (bool, error) {
 
 // ExistDomainRecord 检查域名解析记录是否存在
 func (this *DNSDomainDAO) ExistDomainRecord(tx *dbs.Tx, domainId int64, recordName string, recordType string, recordRoute string, recordValue string) (bool, error) {
+	recordType = strings.ToUpper(recordType)
+
 	query := maps.Map{
 		"name": recordName,
 		"type": recordType,
@@ -239,10 +272,38 @@ func (this *DNSDomainDAO) ExistDomainRecord(tx *dbs.Tx, domainId int64, recordNa
 			}
 		}
 	}
-	recordType = strings.ToUpper(recordType)
 	return this.Query(tx).
 		Pk(domainId).
 		Where("JSON_CONTAINS(records, :query)").
 		Param("query", query.AsJSON()).
 		Exist()
+}
+
+// FindEnabledDomainWithName 根据名称查找某个域名
+func (this *DNSDomainDAO) FindEnabledDomainWithName(tx *dbs.Tx, providerId int64, domainName string) (*DNSDomain, error) {
+	one, err := this.Query(tx).
+		State(DNSDomainStateEnabled).
+		Attr("providerId", providerId).
+		Attr("name", domainName).
+		Find()
+	if one != nil {
+		return one.(*DNSDomain), nil
+	}
+	return nil, err
+}
+
+// UpdateDomainIsUp 设置是否在线
+func (this *DNSDomainDAO) UpdateDomainIsUp(tx *dbs.Tx, domainId int64, isUp bool) error {
+	return this.Query(tx).
+		Pk(domainId).
+		Set("isUp", isUp).
+		UpdateQuickly()
+}
+
+// UpdateDomainIsDeleted 设置域名为删除
+func (this *DNSDomainDAO) UpdateDomainIsDeleted(tx *dbs.Tx, domainId int64, isDeleted bool) error {
+	return this.Query(tx).
+		Pk(domainId).
+		Set("isDeleted", isDeleted).
+		UpdateQuickly()
 }

@@ -13,6 +13,9 @@ import (
 type SSHClient struct {
 	raw  *ssh.Client
 	sftp *sftp.Client
+
+	sudo         bool
+	sudoPassword string
 }
 
 func NewSSHClient(raw *ssh.Client) (*SSHClient, error) {
@@ -30,8 +33,18 @@ func NewSSHClient(raw *ssh.Client) (*SSHClient, error) {
 	return c, nil
 }
 
-// 执行shell命令
+// Sudo 设置使用Sudo
+func (this *SSHClient) Sudo(password string) {
+	this.sudo = true
+	this.sudoPassword = password
+}
+
+// Exec 执行shell命令
 func (this *SSHClient) Exec(cmd string) (stdout string, stderr string, err error) {
+	if this.raw.User() != "root" && this.sudo {
+		return this.execSudo(cmd, this.sudoPassword)
+	}
+
 	session, err := this.raw.NewSession()
 	if err != nil {
 		return "", "", err
@@ -40,8 +53,8 @@ func (this *SSHClient) Exec(cmd string) (stdout string, stderr string, err error
 		_ = session.Close()
 	}()
 
-	stdoutBuf := bytes.NewBuffer([]byte{})
-	stderrBuf := bytes.NewBuffer([]byte{})
+	var stdoutBuf = &bytes.Buffer{}
+	var stderrBuf = &bytes.Buffer{}
 	session.Stdout = stdoutBuf
 	session.Stderr = stderrBuf
 	err = session.Run(cmd)
@@ -49,6 +62,79 @@ func (this *SSHClient) Exec(cmd string) (stdout string, stderr string, err error
 		return stdoutBuf.String(), stderrBuf.String(), err
 	}
 	return strings.TrimRight(stdoutBuf.String(), "\n"), stderrBuf.String(), nil
+}
+
+// execSudo 使用sudo执行shell命令
+func (this *SSHClient) execSudo(cmd string, password string) (stdout string, stderr string, err error) {
+	session, err := this.raw.NewSession()
+	if err != nil {
+		return "", "", err
+	}
+	defer func() {
+		_ = session.Close()
+	}()
+
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          0, // disable echo
+		ssh.TTY_OP_ISPEED: 14400,
+		ssh.TTY_OP_OSPEED: 14400,
+	}
+
+	err = session.RequestPty("xterm", 80, 40, modes)
+	if err != nil {
+		return "", "", err
+	}
+
+	var stderrBuf = &bytes.Buffer{}
+	session.Stderr = stderrBuf
+
+	pipeIn, err := session.StdinPipe()
+	if err != nil {
+		return "", "", err
+	}
+
+	pipeOut, err := session.StdoutPipe()
+	if err != nil {
+		return "", "", err
+	}
+
+	var resultErr error
+	var stdoutBuf = bytes.NewBuffer([]byte{})
+
+	go func() {
+		var buf = make([]byte, 512)
+		for {
+			n, err := pipeOut.Read(buf)
+			if n > 0 {
+				if strings.Contains(string(buf[:n]), "[sudo] password for") {
+					_, err = pipeIn.Write([]byte(password + "\n"))
+					if err != nil {
+						resultErr = err
+						return
+					}
+					continue
+				}
+				stdoutBuf.Write(buf[:n])
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	err = session.Run("sudo " + cmd)
+
+	stdout = strings.TrimSpace(stdoutBuf.String())
+	stderr = strings.TrimSpace(stderrBuf.String())
+
+	if err != nil {
+		return stdout, stderr, err
+	}
+
+	if resultErr != nil {
+		return stdout, stderr, resultErr
+	}
+	return stdout, stderr, nil
 }
 
 func (this *SSHClient) Listen(network string, addr string) (net.Listener, error) {
@@ -79,14 +165,21 @@ func (this *SSHClient) Mkdir(path string) error {
 }
 
 func (this *SSHClient) MkdirAll(path string) error {
-	return this.sftp.MkdirAll(path)
+	err := this.sftp.MkdirAll(path)
+	if err != nil && this.sudo {
+		_, _, err2 := this.execSudo("mkdir -p "+path, this.sudoPassword)
+		if err2 == nil {
+			return nil
+		}
+	}
+	return err
 }
 
 func (this *SSHClient) Chmod(path string, mode os.FileMode) error {
 	return this.sftp.Chmod(path, mode)
 }
 
-// 拷贝文件
+// Copy 拷贝文件
 func (this *SSHClient) Copy(localPath string, remotePath string, mode os.FileMode) error {
 	localFp, err := os.Open(localPath)
 	if err != nil {
@@ -110,12 +203,12 @@ func (this *SSHClient) Copy(localPath string, remotePath string, mode os.FileMod
 	return this.Chmod(remotePath, mode)
 }
 
-// 获取新Session
+// NewSession 获取新Session
 func (this *SSHClient) NewSession() (*ssh.Session, error) {
 	return this.raw.NewSession()
 }
 
-// 读取文件内容
+// ReadFile 读取文件内容
 func (this *SSHClient) ReadFile(path string) ([]byte, error) {
 	fp, err := this.sftp.OpenFile(path, 0444)
 	if err != nil {
@@ -134,7 +227,7 @@ func (this *SSHClient) ReadFile(path string) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-// 写入文件内容
+// WriteFile 写入文件内容
 func (this *SSHClient) WriteFile(path string, data []byte) (n int, err error) {
 	fp, err := this.sftp.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err != nil {
@@ -148,7 +241,35 @@ func (this *SSHClient) WriteFile(path string, data []byte) (n int, err error) {
 	return
 }
 
-// 删除文件
+// Remove 删除文件
 func (this *SSHClient) Remove(path string) error {
 	return this.sftp.Remove(path)
+}
+
+// User 用户名
+func (this *SSHClient) User() string {
+	return this.raw.User()
+}
+
+// UserHome 用户地址
+func (this *SSHClient) UserHome() string {
+	homeStdout, _, err := this.Exec("echo $HOME")
+	if err != nil {
+		return this.defaultUserHome()
+	}
+
+	var home = strings.TrimSpace(homeStdout)
+	if len(home) > 0 {
+		return home
+	}
+
+	return this.defaultUserHome()
+}
+
+func (this *SSHClient) defaultUserHome() string {
+	var user = this.raw.User()
+	if user == "root" {
+		return "/root"
+	}
+	return "/home/" + user
 }

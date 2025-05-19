@@ -2,24 +2,19 @@ package services
 
 import (
 	"context"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
-// 互斥锁管理
+// SysLockerService 互斥锁管理
 type SysLockerService struct {
 	BaseService
 }
 
-// 获得锁
+// SysLockerLock 获得锁
 func (this *SysLockerService) SysLockerLock(ctx context.Context, req *pb.SysLockerLockRequest) (*pb.SysLockerLockResponse, error) {
-	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
-	if err != nil {
-		_, err = this.ValidateMonitor(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
+	_, userId, err := this.ValidateAdminAndUser(ctx, false)
 
 	key := req.Key
 	if userId > 0 {
@@ -41,15 +36,9 @@ func (this *SysLockerService) SysLockerLock(ctx context.Context, req *pb.SysLock
 	return &pb.SysLockerLockResponse{Ok: ok}, nil
 }
 
-// 释放锁
+// SysLockerUnlock 释放锁
 func (this *SysLockerService) SysLockerUnlock(ctx context.Context, req *pb.SysLockerUnlockRequest) (*pb.RPCSuccess, error) {
-	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
-	if err != nil {
-		_, err = this.ValidateMonitor(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
+	_, userId, err := this.ValidateAdminAndUser(ctx, false)
 
 	key := req.Key
 	if userId > 0 {

@@ -3,15 +3,21 @@ package models
 import (
 	"encoding/json"
 	"errors"
+	"net"
+	"strconv"
+	"strings"
+
+	"github.com/dashenmiren/EdgeAPI/internal/configs"
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
+	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
-	"strconv"
 )
 
 const (
@@ -46,20 +52,41 @@ func (this *APINodeDAO) EnableAPINode(tx *dbs.Tx, id int64) error {
 		Pk(id).
 		Set("state", APINodeStateEnabled).
 		Update()
-	return err
+	if err != nil {
+		return err
+	}
+	return this.NotifyUpdate(tx, id)
 }
 
 // DisableAPINode 禁用条目
-func (this *APINodeDAO) DisableAPINode(tx *dbs.Tx, id int64) error {
+func (this *APINodeDAO) DisableAPINode(tx *dbs.Tx, nodeId int64) error {
 	_, err := this.Query(tx).
-		Pk(id).
+		Pk(nodeId).
 		Set("state", APINodeStateDisabled).
 		Update()
-	return err
+	if err != nil {
+		return err
+	}
+
+	err = this.NotifyUpdate(tx, nodeId)
+	if err != nil {
+		return err
+	}
+
+	// 删除运行日志
+	return SharedNodeLogDAO.DeleteNodeLogs(tx, nodeconfigs.NodeRoleAPI, nodeId)
 }
 
 // FindEnabledAPINode 查找启用中的条目
-func (this *APINodeDAO) FindEnabledAPINode(tx *dbs.Tx, id int64) (*APINode, error) {
+func (this *APINodeDAO) FindEnabledAPINode(tx *dbs.Tx, id int64, cacheMap *utils.CacheMap) (*APINode, error) {
+	var cacheKey = this.Table + ":FindEnabledAPINode:" + types.String(id)
+	if cacheMap != nil {
+		cache, ok := cacheMap.Get(cacheKey)
+		if ok {
+			return cache.(*APINode), nil
+		}
+	}
+
 	result, err := this.Query(tx).
 		Pk(id).
 		Attr("state", APINodeStateEnabled).
@@ -67,6 +94,11 @@ func (this *APINodeDAO) FindEnabledAPINode(tx *dbs.Tx, id int64) (*APINode, erro
 	if result == nil {
 		return nil, err
 	}
+
+	if cacheMap != nil {
+		cacheMap.Put(cacheKey, result)
+	}
+
 	return result.(*APINode), err
 }
 
@@ -103,7 +135,7 @@ func (this *APINodeDAO) CreateAPINode(tx *dbs.Tx, name string, description strin
 		return
 	}
 
-	op := NewAPINodeOperator()
+	var op = NewAPINodeOperator()
 	op.IsOn = isOn
 	op.UniqueId = uniqueId
 	op.Secret = secret
@@ -133,16 +165,33 @@ func (this *APINodeDAO) CreateAPINode(tx *dbs.Tx, name string, description strin
 		return
 	}
 
+	err = this.NotifyUpdate(tx, types.Int64(op.Id))
+	if err != nil {
+		remotelogs.Error("API_NODE_DAO", err.Error())
+	}
+
 	return types.Int64(op.Id), nil
 }
 
 // UpdateAPINode 修改API节点
-func (this *APINodeDAO) UpdateAPINode(tx *dbs.Tx, nodeId int64, name string, description string, httpJSON []byte, httpsJSON []byte, restIsOn bool, restHTTPJSON []byte, restHTTPSJSON []byte, accessAddrsJSON []byte, isOn bool) error {
+func (this *APINodeDAO) UpdateAPINode(tx *dbs.Tx, nodeId int64, name string, description string, httpJSON []byte, httpsJSON []byte, restIsOn bool, restHTTPJSON []byte, restHTTPSJSON []byte, accessAddrsJSON []byte, isOn bool, isPrimary bool) error {
 	if nodeId <= 0 {
 		return errors.New("invalid nodeId")
 	}
 
-	op := NewAPINodeOperator()
+	// 取消别的Primary
+	if isPrimary {
+		err := this.Query(tx).
+			Neq("id", nodeId).
+			Attr("isPrimary", true).
+			Set("isPrimary", false).
+			UpdateQuickly()
+		if err != nil {
+			return err
+		}
+	}
+
+	var op = NewAPINodeOperator()
 	op.Id = nodeId
 	op.Name = name
 	op.Description = description
@@ -175,8 +224,13 @@ func (this *APINodeDAO) UpdateAPINode(tx *dbs.Tx, nodeId int64, name string, des
 		op.AccessAddrs = "[]"
 	}
 
+	op.IsPrimary = isPrimary
+
 	err := this.Save(tx, op)
-	return err
+	if err != nil {
+		return err
+	}
+	return this.NotifyUpdate(tx, nodeId)
 }
 
 // FindAllEnabledAPINodes 列出所有可用API节点
@@ -208,6 +262,23 @@ func (this *APINodeDAO) FindAllEnabledAndOnAPINodes(tx *dbs.Tx) (result []*APINo
 func (this *APINodeDAO) CountAllEnabledAPINodes(tx *dbs.Tx) (int64, error) {
 	return this.Query(tx).
 		State(APINodeStateEnabled).
+		Count()
+}
+
+// CountAllEnabledAndOnAPINodes 计算启用中的API节点数量
+func (this *APINodeDAO) CountAllEnabledAndOnAPINodes(tx *dbs.Tx) (int64, error) {
+	return this.Query(tx).
+		State(APINodeStateEnabled).
+		Attr("isOn", true).
+		Count()
+}
+
+// CountAllEnabledAndOnOfflineAPINodes 计算API节点数量
+func (this *APINodeDAO) CountAllEnabledAndOnOfflineAPINodes(tx *dbs.Tx) (int64, error) {
+	return this.Query(tx).
+		State(APINodeStateEnabled).
+		Attr("isOn", true).
+		Where("(status IS NULL OR NOT JSON_EXTRACT(status, '$.isActive') OR UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')>60)").
 		Count()
 }
 
@@ -261,6 +332,175 @@ func (this *APINodeDAO) UpdateAPINodeStatus(tx *dbs.Tx, apiNodeId int64, statusJ
 	return err
 }
 
+// CountAllLowerVersionNodes 计算所有节点中低于某个版本的节点数量
+func (this *APINodeDAO) CountAllLowerVersionNodes(tx *dbs.Tx, version string) (int64, error) {
+	return this.Query(tx).
+		State(APINodeStateEnabled).
+		Attr("isOn", true).
+		Where("status IS NOT NULL").
+		Where("(JSON_EXTRACT(status, '$.buildVersionCode') IS NULL OR JSON_EXTRACT(status, '$.buildVersionCode')<:version)").
+		Param("version", utils.VersionToLong(version)).
+		Count()
+}
+
+// CountAllEnabledAPINodesWithSSLPolicyIds 计算使用SSL策略的所有API节点数量
+func (this *APINodeDAO) CountAllEnabledAPINodesWithSSLPolicyIds(tx *dbs.Tx, sslPolicyIds []int64) (count int64, err error) {
+	if len(sslPolicyIds) == 0 {
+		return
+	}
+	policyStringIds := []string{}
+	for _, policyId := range sslPolicyIds {
+		policyStringIds = append(policyStringIds, strconv.FormatInt(policyId, 10))
+	}
+	return this.Query(tx).
+		State(APINodeStateEnabled).
+		Where("(FIND_IN_SET(JSON_EXTRACT(https, '$.sslPolicyRef.sslPolicyId'), :policyIds) OR FIND_IN_SET(JSON_EXTRACT(restHTTPS, '$.sslPolicyRef.sslPolicyId'), :policyIds))").
+		Param("policyIds", strings.Join(policyStringIds, ",")).
+		Count()
+}
+
+// FindAllEnabledAPIAccessIPs 获取所有的API可访问IP地址
+func (this *APINodeDAO) FindAllEnabledAPIAccessIPs(tx *dbs.Tx, cacheMap *utils.CacheMap) ([]string, error) {
+	var cacheKey = this.Table + ":FindAllEnabledAPIAccessIPs"
+	if cacheMap != nil {
+		cache, ok := cacheMap.Get(cacheKey)
+		if ok {
+			return cache.([]string), nil
+		}
+	}
+
+	ones, _, err := this.Query(tx).
+		State(APINodeStateEnabled).
+		Result("JSON_EXTRACT(accessAddrs, '$[*].host') AS host").
+		FindOnes()
+	if err != nil {
+		return nil, err
+	}
+	var result = []string{}
+	for _, one := range ones {
+		var host = one.GetString("host")
+		if len(host) == 0 {
+			continue
+		}
+
+		var ips = []string{}
+		err = json.Unmarshal([]byte(host), &ips)
+		if err != nil {
+			continue
+		}
+
+		for _, ip := range ips {
+			if !lists.ContainsString(result, ip) {
+				if net.ParseIP(ip) == nil {
+					continue
+				}
+
+				result = append(result, ip)
+			}
+		}
+	}
+
+	if cacheMap != nil {
+		cacheMap.Put(cacheKey, result)
+	}
+
+	return result, nil
+}
+
+// CheckAPINodeIsPrimary 检查当前节点是否为Primary节点
+func (this *APINodeDAO) CheckAPINodeIsPrimary(tx *dbs.Tx) (bool, error) {
+	config, err := configs.SharedAPIConfig()
+	if err != nil {
+		return false, err
+	}
+
+	isPrimary, err := this.Query(tx).
+		State(APINodeStateEnabled).
+		Attr("uniqueId", config.NodeId).
+		Attr("isPrimary", true).
+		Exist()
+	if err != nil {
+		return false, err
+	}
+
+	if isPrimary {
+		return true, nil
+	}
+
+	// 检查是否有别的Primary节点
+	count, err := this.Query(tx).
+		State(APINodeStateEnabled).
+		Attr("isOn", true).
+		Attr("isPrimary", true).
+		Count()
+	if err != nil {
+		return false, err
+	}
+
+	if count == 0 {
+		err = this.ResetPrimaryAPINode(tx)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// CheckAPINodeIsPrimaryWithoutErr 检查当前节点是否为Primary节点，并忽略错误
+func (this *APINodeDAO) CheckAPINodeIsPrimaryWithoutErr() bool {
+	b, err := this.CheckAPINodeIsPrimary(nil)
+	return b && err == nil
+}
+
+// ResetPrimaryAPINode 重置Primary节点
+func (this *APINodeDAO) ResetPrimaryAPINode(tx *dbs.Tx) error {
+	// 当前是否有Primary节点
+	apiNode, err := this.Query(tx).
+		State(APINodeStateEnabled).
+		Attr("isOn", true).
+		Attr("isPrimary", true).
+		Find()
+	if err != nil {
+		return err
+	}
+	if apiNode == nil {
+		// 选择一个作为Primary
+		// TODO 将来需要考虑API节点离线的情况
+		apiNodeId, err := this.Query(tx).
+			State(APINodeStateEnabled).
+			Attr("isOn", true).
+			ResultPk().
+			FindInt64Col(0)
+		if err != nil {
+			return err
+		}
+		if apiNodeId > 0 {
+			err = this.Query(tx).
+				Pk(apiNodeId).
+				Set("isPrimary", true).
+				UpdateQuickly()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// NotifyUpdate 通知变更
+func (this *APINodeDAO) NotifyUpdate(tx *dbs.Tx, apiNodeId int64) error {
+	// suppress IDE warning
+	_ = apiNodeId
+
+	err := this.ResetPrimaryAPINode(tx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // 生成唯一ID
 func (this *APINodeDAO) genUniqueId(tx *dbs.Tx) (string, error) {
 	for {
@@ -276,14 +516,4 @@ func (this *APINodeDAO) genUniqueId(tx *dbs.Tx) (string, error) {
 		}
 		return uniqueId, nil
 	}
-}
-
-// CountAllLowerVersionNodes 计算所有节点中低于某个版本的节点数量
-func (this *APINodeDAO) CountAllLowerVersionNodes(tx *dbs.Tx, version string) (int64, error) {
-	return this.Query(tx).
-		State(APINodeStateEnabled).
-		Where("status IS NOT NULL").
-		Where("(JSON_EXTRACT(status, '$.buildVersionCode') IS NULL OR JSON_EXTRACT(status, '$.buildVersionCode')<:version)").
-		Param("version", utils.VersionToLong(version)).
-		Count()
 }

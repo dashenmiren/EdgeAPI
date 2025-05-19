@@ -1,10 +1,12 @@
 package models
 
 import (
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/iwind/TeaGo/dbs"
 	"runtime"
 	"testing"
+
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/iwind/TeaGo/dbs"
 )
 
 func TestAPINodeDAO_FindEnabledAPINodeIdWithAddr(t *testing.T) {
@@ -25,6 +27,22 @@ func TestAPINodeDAO_FindEnabledAPINodeIdWithAddr(t *testing.T) {
 		}
 		t.Log("apiNodeId:", apiNodeId)
 	}
+}
+
+func TestAPINodeDAO_FindAllEnabledAPIAccessIPs(t *testing.T) {
+	var cacheMap = utils.NewCacheMap()
+	t.Log(NewAPINodeDAO().FindAllEnabledAPIAccessIPs(nil, cacheMap))
+	t.Log(NewAPINodeDAO().FindAllEnabledAPIAccessIPs(nil, cacheMap))
+}
+
+func TestAPINodeDAO_CheckAPINodeIsPrimary(t *testing.T) {
+	var dao = NewAPINodeDAO()
+	t.Log(dao.CheckAPINodeIsPrimary(nil))
+}
+
+func TestAPINodeDAO_ResetPrimaryAPINode(t *testing.T) {
+	var dao = NewAPINodeDAO()
+	t.Log(dao.ResetPrimaryAPINode(nil))
 }
 
 func BenchmarkAPINodeDAO_New(b *testing.B) {

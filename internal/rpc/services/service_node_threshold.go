@@ -1,9 +1,8 @@
-// Copyright 2021 Liuxiangchao iwind.liu@gmail.com. All rights reserved.
-
 package services
 
 import (
 	"context"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
@@ -17,7 +16,7 @@ type NodeThresholdService struct {
 
 // CreateNodeThreshold 创建阈值
 func (this *NodeThresholdService) CreateNodeThreshold(ctx context.Context, req *pb.CreateNodeThresholdRequest) (*pb.CreateNodeThresholdResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +30,7 @@ func (this *NodeThresholdService) CreateNodeThreshold(ctx context.Context, req *
 
 // UpdateNodeThreshold 创建阈值
 func (this *NodeThresholdService) UpdateNodeThreshold(ctx context.Context, req *pb.UpdateNodeThresholdRequest) (*pb.RPCSuccess, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +44,7 @@ func (this *NodeThresholdService) UpdateNodeThreshold(ctx context.Context, req *
 
 // DeleteNodeThreshold 删除阈值
 func (this *NodeThresholdService) DeleteNodeThreshold(ctx context.Context, req *pb.DeleteNodeThresholdRequest) (*pb.RPCSuccess, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +58,7 @@ func (this *NodeThresholdService) DeleteNodeThreshold(ctx context.Context, req *
 
 // FindAllEnabledNodeThresholds 查询阈值
 func (this *NodeThresholdService) FindAllEnabledNodeThresholds(ctx context.Context, req *pb.FindAllEnabledNodeThresholdsRequest) (*pb.FindAllEnabledNodeThresholdsResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -94,13 +93,13 @@ func (this *NodeThresholdService) FindAllEnabledNodeThresholds(ctx context.Conte
 			Item:           threshold.Item,
 			Param:          threshold.Param,
 			Operator:       threshold.Operator,
-			ValueJSON:      []byte(threshold.Value),
+			ValueJSON:      threshold.Value,
 			Message:        threshold.Message,
 			Duration:       types.Int32(threshold.Duration),
 			DurationUnit:   threshold.DurationUnit,
 			SumMethod:      threshold.SumMethod,
 			NotifyDuration: int32(threshold.NotifyDuration),
-			IsOn:           threshold.IsOn == 1,
+			IsOn:           threshold.IsOn,
 		})
 	}
 	return &pb.FindAllEnabledNodeThresholdsResponse{NodeThresholds: pbThresholds}, nil
@@ -108,13 +107,13 @@ func (this *NodeThresholdService) FindAllEnabledNodeThresholds(ctx context.Conte
 
 // CountAllEnabledNodeThresholds 计算阈值数量
 func (this *NodeThresholdService) CountAllEnabledNodeThresholds(ctx context.Context, req *pb.CountAllEnabledNodeThresholdsRequest) (*pb.RPCCountResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	var tx = this.NullTx()
-	count, err := models.SharedNodeThresholdDAO.CountAllEnabledThresholds(tx, req.NodeClusterId, req.NodeId)
+	count, err := models.SharedNodeThresholdDAO.CountAllEnabledThresholds(tx, req.Role, req.NodeClusterId, req.NodeId)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +122,7 @@ func (this *NodeThresholdService) CountAllEnabledNodeThresholds(ctx context.Cont
 
 // FindEnabledNodeThreshold 查询单个阈值详情
 func (this *NodeThresholdService) FindEnabledNodeThreshold(ctx context.Context, req *pb.FindEnabledNodeThresholdRequest) (*pb.FindEnabledNodeThresholdResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -160,12 +159,12 @@ func (this *NodeThresholdService) FindEnabledNodeThreshold(ctx context.Context, 
 		Item:           threshold.Item,
 		Param:          threshold.Param,
 		Operator:       threshold.Operator,
-		ValueJSON:      []byte(threshold.Value),
+		ValueJSON:      threshold.Value,
 		Message:        threshold.Message,
 		Duration:       types.Int32(threshold.Duration),
 		DurationUnit:   threshold.DurationUnit,
 		SumMethod:      threshold.SumMethod,
 		NotifyDuration: int32(threshold.NotifyDuration),
-		IsOn:           threshold.IsOn == 1,
+		IsOn:           threshold.IsOn,
 	}}, nil
 }

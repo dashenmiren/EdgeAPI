@@ -1,17 +1,20 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
+
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 )
 
-// 解析HTTP配置
+// DecodeHTTP 解析HTTP配置
 func (this *UserNode) DecodeHTTP() (*serverconfigs.HTTPProtocolConfig, error) {
 	if !IsNotNull(this.Http) {
 		return nil, nil
 	}
 	config := &serverconfigs.HTTPProtocolConfig{}
-	err := json.Unmarshal([]byte(this.Http), config)
+	err := json.Unmarshal(this.Http, config)
 	if err != nil {
 		return nil, err
 	}
@@ -24,18 +27,18 @@ func (this *UserNode) DecodeHTTP() (*serverconfigs.HTTPProtocolConfig, error) {
 	return config, nil
 }
 
-// 解析HTTPS配置
-func (this *UserNode) DecodeHTTPS() (*serverconfigs.HTTPSProtocolConfig, error) {
+// DecodeHTTPS 解析HTTPS配置
+func (this *UserNode) DecodeHTTPS(cacheMap *utils.CacheMap) (*serverconfigs.HTTPSProtocolConfig, error) {
 	if !IsNotNull(this.Https) {
 		return nil, nil
 	}
 	config := &serverconfigs.HTTPSProtocolConfig{}
-	err := json.Unmarshal([]byte(this.Https), config)
+	err := json.Unmarshal(this.Https, config)
 	if err != nil {
 		return nil, err
 	}
 
-	err = config.Init()
+	err = config.Init(context.TODO())
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +46,7 @@ func (this *UserNode) DecodeHTTPS() (*serverconfigs.HTTPSProtocolConfig, error) 
 	if config.SSLPolicyRef != nil {
 		policyId := config.SSLPolicyRef.SSLPolicyId
 		if policyId > 0 {
-			sslPolicy, err := SharedSSLPolicyDAO.ComposePolicyConfig(nil, policyId)
+			sslPolicy, err := SharedSSLPolicyDAO.ComposePolicyConfig(nil, policyId, false, nil, cacheMap)
 			if err != nil {
 				return nil, err
 			}
@@ -53,7 +56,7 @@ func (this *UserNode) DecodeHTTPS() (*serverconfigs.HTTPSProtocolConfig, error) 
 		}
 	}
 
-	err = config.Init()
+	err = config.Init(context.TODO())
 	if err != nil {
 		return nil, err
 	}
@@ -61,14 +64,14 @@ func (this *UserNode) DecodeHTTPS() (*serverconfigs.HTTPSProtocolConfig, error) 
 	return config, nil
 }
 
-// 解析访问地址
+// DecodeAccessAddrs 解析访问地址
 func (this *UserNode) DecodeAccessAddrs() ([]*serverconfigs.NetworkAddressConfig, error) {
 	if !IsNotNull(this.AccessAddrs) {
 		return nil, nil
 	}
 
 	addrConfigs := []*serverconfigs.NetworkAddressConfig{}
-	err := json.Unmarshal([]byte(this.AccessAddrs), &addrConfigs)
+	err := json.Unmarshal(this.AccessAddrs, &addrConfigs)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +84,7 @@ func (this *UserNode) DecodeAccessAddrs() ([]*serverconfigs.NetworkAddressConfig
 	return addrConfigs, nil
 }
 
-// 解析访问地址，并返回字符串形式
+// DecodeAccessAddrStrings 解析访问地址，并返回字符串形式
 func (this *UserNode) DecodeAccessAddrStrings() ([]string, error) {
 	addrs, err := this.DecodeAccessAddrs()
 	if err != nil {

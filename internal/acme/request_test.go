@@ -2,13 +2,14 @@ package acme
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
 	"github.com/go-acme/lego/v4/registration"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
-	"testing"
 )
 
 func TestRequest_Run_DNS(t *testing.T) {
@@ -39,10 +40,10 @@ func TestRequest_Run_DNS(t *testing.T) {
 
 	req := NewRequest(&Task{
 		User:        user,
-		Type:        TaskTypeDNS,
+		AuthType:    AuthTypeDNS,
 		DNSProvider: dnsProvider,
 		DNSDomain:   "yun4s.cn",
-		Domains:     []string{"yun4s.cn"},
+		Domains:     []string{"www.yun4s.cn"},
 	})
 	certData, keyData, err := req.Run()
 	if err != nil {
@@ -74,9 +75,9 @@ func TestRequest_Run_HTTP(t *testing.T) {
 	}
 
 	req := NewRequest(&Task{
-		User:    user,
-		Type:    TaskTypeHTTP,
-		Domains: []string{"teaos.cn", "www.teaos.cn", "meloy.cn"},
+		User:     user,
+		AuthType: AuthTypeHTTP,
+		Domains:  []string{"teaos.cn", "www.teaos.cn", "meloy.cn"},
 	})
 	certData, keyData, err := req.runHTTP()
 	if err != nil {

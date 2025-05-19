@@ -2,38 +2,44 @@ package tasks
 
 import (
 	"encoding/json"
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
-	"github.com/iwind/TeaGo/dbs"
-	"github.com/iwind/TeaGo/logs"
-	timeutil "github.com/iwind/TeaGo/utils/time"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/goman"
+	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
+	"github.com/iwind/TeaGo/dbs"
+	timeutil "github.com/iwind/TeaGo/utils/time"
 )
 
 func init() {
-	dbs.OnReady(func() {
-		task := NewServerAccessLogCleaner()
-		go task.Start()
+	dbs.OnReadyDone(func() {
+		goman.New(func() {
+			NewServerAccessLogCleaner(6 * time.Hour).Start()
+		})
 	})
 }
 
-// 服务访问日志自动清理
+// ServerAccessLogCleaner 服务访问日志自动清理
 type ServerAccessLogCleaner struct {
+	BaseTask
+
+	ticker *time.Ticker
 }
 
-func NewServerAccessLogCleaner() *ServerAccessLogCleaner {
-	return &ServerAccessLogCleaner{}
+func NewServerAccessLogCleaner(duration time.Duration) *ServerAccessLogCleaner {
+	return &ServerAccessLogCleaner{
+		ticker: time.NewTicker(duration),
+	}
 }
 
 func (this *ServerAccessLogCleaner) Start() {
-	ticker := time.NewTicker(12 * time.Hour)
-	for range ticker.C {
+	for range this.ticker.C {
 		err := this.Loop()
 		if err != nil {
-			logs.Println("[TASK][ServerAccessLogCleaner]Error: " + err.Error())
+			this.logErr("[TASK][ServerAccessLogCleaner]", err.Error())
 		}
 	}
 }
@@ -47,7 +53,7 @@ func (this *ServerAccessLogCleaner) Loop() error {
 	if len(configJSON) == 0 {
 		return nil
 	}
-	config := &systemconfigs.DatabaseConfig{}
+	var config = systemconfigs.NewDatabaseConfig()
 	err = json.Unmarshal(configJSON, config)
 	if err != nil {
 		return err
@@ -55,8 +61,8 @@ func (this *ServerAccessLogCleaner) Loop() error {
 	if config.ServerAccessLog.Clean.Days <= 0 {
 		return nil
 	}
-	days := config.ServerAccessLog.Clean.Days
-	endDay := timeutil.Format("Ymd", time.Now().AddDate(0, 0, -days+1))
+	var days = config.ServerAccessLog.Clean.Days
+	var endDay = timeutil.Format("Ymd", time.Now().AddDate(0, 0, -days+1))
 
 	// 当前连接的数据库
 	db, err := dbs.Default()
@@ -74,49 +80,53 @@ func (this *ServerAccessLogCleaner) Loop() error {
 		return err
 	}
 	for _, node := range nodes {
-		dbConfig := node.DBConfig()
-		db, err := dbs.NewInstanceFromConfig(dbConfig)
-		if err != nil {
-			return err
-		}
-		err = this.cleanDB(db, endDay)
-		if err != nil {
-			_ = db.Close()
-			return err
-		}
+		err := func(node *models.DBNode) error {
+			var dbConfig = node.DBConfig()
+			nodeDB, err := dbs.NewInstanceFromConfig(dbConfig)
+			if err != nil {
+				return err
+			}
 
-		_ = db.Close()
+			defer func() {
+				_ = nodeDB.Close()
+			}()
+
+			err = this.cleanDB(nodeDB, endDay)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}(node)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 func (this *ServerAccessLogCleaner) cleanDB(db *dbs.DB, endDay string) error {
-	ones, columnNames, err := db.FindOnes("SHOW TABLES")
+	ones, columnNames, err := db.FindPreparedOnes("SHOW TABLES")
 	if err != nil {
 		return err
 	}
 	if len(columnNames) != 1 {
 		return errors.New("invalid column names: " + strings.Join(columnNames, ", "))
 	}
-	columnName := columnNames[0]
+	var columnName = columnNames[0]
+	var reg = regexp.MustCompile(`^(?i)(edgeHTTPAccessLogs|edgeNSAccessLogs)_(\d{8})(_\d{4})?$`)
 	for _, one := range ones {
-		tableName := one.GetString(columnName)
+		var tableName = one.GetString(columnName)
 		if len(tableName) == 0 {
 			continue
 		}
-		ok, err := regexp.MatchString(`^(?i)edgeHTTPAccessLogs_(\d{8})$`, tableName)
-		if err != nil {
-			return err
-		}
-		if !ok {
+		if !reg.MatchString(tableName) {
 			continue
 		}
-		index := strings.LastIndex(tableName, "_")
-		if index < 0 {
-			continue
-		}
-		day := tableName[index+1:]
+		var matches = reg.FindStringSubmatch(tableName)
+		var day = matches[2]
+
 		if day < endDay {
 			_, err = db.Exec("DROP TABLE " + tableName)
 			if err != nil {

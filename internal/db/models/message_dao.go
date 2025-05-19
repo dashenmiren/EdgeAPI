@@ -3,13 +3,16 @@ package models
 import (
 	"crypto/md5"
 	"fmt"
+	"time"
+
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
-	"time"
 )
 
 const (
@@ -25,19 +28,36 @@ const (
 type MessageType = string
 
 const (
+	MessageTypeAll MessageType = "*"
+
+	// 这里的命名问题（首字母大写）为历史遗留问题，暂不修改
+
 	MessageTypeHealthCheckFailed          MessageType = "HealthCheckFailed"          // 节点健康检查失败
 	MessageTypeHealthCheckNodeUp          MessageType = "HealthCheckNodeUp"          // 因健康检查节点上线
 	MessageTypeHealthCheckNodeDown        MessageType = "HealthCheckNodeDown"        // 因健康检查节点下线
-	MessageTypeNodeInactive               MessageType = "NodeInactive"               // 节点不活跃
-	MessageTypeNodeActive                 MessageType = "NodeActive"                 // 节点活跃
+	MessageTypeNodeInactive               MessageType = "NodeInactive"               // 边缘节点不活跃
+	MessageTypeNodeActive                 MessageType = "NodeActive"                 // 边缘节点活跃
 	MessageTypeClusterDNSSyncFailed       MessageType = "ClusterDNSSyncFailed"       // DNS同步失败
 	MessageTypeSSLCertExpiring            MessageType = "SSLCertExpiring"            // SSL证书即将过期
 	MessageTypeSSLCertACMETaskFailed      MessageType = "SSLCertACMETaskFailed"      // SSL证书任务执行失败
 	MessageTypeSSLCertACMETaskSuccess     MessageType = "SSLCertACMETaskSuccess"     // SSL证书任务执行成功
 	MessageTypeLogCapacityOverflow        MessageType = "LogCapacityOverflow"        // 日志超出最大限制
-	MessageTypeServerNamesAuditingSuccess MessageType = "ServerNamesAuditingSuccess" // 服务域名审核成功
-	MessageTypeServerNamesAuditingFailed  MessageType = "ServerNamesAuditingFailed"  // 服务域名审核失败
+	MessageTypeServerNamesAuditingSuccess MessageType = "ServerNamesAuditingSuccess" // 服务域名审核成功（用户）
+	MessageTypeServerNamesAuditingFailed  MessageType = "ServerNamesAuditingFailed"  // 服务域名审核失败（用户）
+	MessageTypeServerNamesRequireAuditing MessageType = "serverNamesRequireAuditing" // 服务域名需要审核（管理员）
 	MessageTypeThresholdSatisfied         MessageType = "ThresholdSatisfied"         // 满足阈值
+	MessageTypeFirewallEvent              MessageType = "FirewallEvent"              // 防火墙事件
+	MessageTypeIPAddrUp                   MessageType = "IPAddrUp"                   // IP地址上线
+	MessageTypeIPAddrDown                 MessageType = "IPAddrDown"                 // IP地址下线
+
+	MessageTypeNSNodeInactive MessageType = "NSNodeInactive" // NS节点不活跃
+	MessageTypeNSNodeActive   MessageType = "NSNodeActive"   // NS节点活跃
+
+	MessageTypeReportNodeInactive MessageType = "ReportNodeInactive" // 区域监控节点节点不活跃
+	MessageTypeReportNodeActive   MessageType = "ReportNodeActive"   // 区域监控节点活跃
+	MessageTypeConnectivity       MessageType = "Connectivity"       // 连通性
+	MessageTypeNodeSchedule       MessageType = "NodeSchedule"       // 节点调度信息
+	MessageTypeNodeOfflineDay     MessageType = "NodeOfflineDay"     // 节点到下线日期
 )
 
 type MessageDAO dbs.DAO
@@ -92,18 +112,17 @@ func (this *MessageDAO) FindEnabledMessage(tx *dbs.Tx, id int64) (*Message, erro
 }
 
 // CreateClusterMessage 创建集群消息
-func (this *MessageDAO) CreateClusterMessage(tx *dbs.Tx, clusterId int64, messageType MessageType, level string, subject string, body string, paramsJSON []byte) error {
-	_, err := this.createMessage(tx, clusterId, 0, messageType, level, subject, body, paramsJSON)
+func (this *MessageDAO) CreateClusterMessage(tx *dbs.Tx, role string, clusterId int64, messageType MessageType, level string, subject string, shortBody string, body string, paramsJSON []byte) error {
+	if len(shortBody) == 0 {
+		shortBody = body
+	}
+	_, err := this.createMessage(tx, role, clusterId, 0, messageType, level, subject, shortBody, paramsJSON)
 	if err != nil {
 		return err
 	}
 
 	// 发送给媒介接收人
-	err = SharedMessageTaskDAO.CreateMessageTasks(tx, MessageTaskTarget{
-		ClusterId: clusterId,
-		NodeId:    0,
-		ServerId:  0,
-	}, messageType, subject, body)
+	err = SharedMessageTaskDAO.CreateMessageTasks(tx, role, clusterId, 0, 0, messageType, subject, body)
 	if err != nil {
 		return err
 	}
@@ -112,45 +131,31 @@ func (this *MessageDAO) CreateClusterMessage(tx *dbs.Tx, clusterId int64, messag
 }
 
 // CreateNodeMessage 创建节点消息
-func (this *MessageDAO) CreateNodeMessage(tx *dbs.Tx, clusterId int64, nodeId int64, messageType MessageType, level string, subject string, body string, paramsJSON []byte) error {
+func (this *MessageDAO) CreateNodeMessage(tx *dbs.Tx, role string, clusterId int64, nodeId int64, messageType MessageType, level string, subject string, body string, paramsJSON []byte, force bool) error {
 	// 检查N分钟内是否已经发送过
-	hash := this.calHash(subject, body, paramsJSON)
-	exists, err := this.Query(tx).
-		Attr("hash", hash).
-		Gt("createdAt", time.Now().Unix()-10*60). // 10分钟
-		Exist()
-	if err != nil {
-		return err
-	}
-	if exists {
-		return nil
+	hash := this.calHash(role, clusterId, nodeId, subject, body, paramsJSON)
+	if !force {
+		exists, err := this.Query(tx).
+			Attr("hash", hash).
+			Gt("createdAt", time.Now().Unix()-10*60). // 10分钟
+			Exist()
+		if err != nil {
+			return err
+		}
+		if exists {
+			return nil
+		}
 	}
 
-	_, err = this.createMessage(tx, clusterId, nodeId, messageType, level, subject, body, paramsJSON)
+	_, err := this.createMessage(tx, role, clusterId, nodeId, messageType, level, subject, body, paramsJSON)
 	if err != nil {
 		return err
 	}
 
 	// 发送给媒介接收人 - 集群
-	err = SharedMessageTaskDAO.CreateMessageTasks(tx, MessageTaskTarget{
-		ClusterId: clusterId,
-		NodeId:    0,
-		ServerId:  0,
-	}, messageType, subject, body)
+	err = SharedMessageTaskDAO.CreateMessageTasks(tx, role, clusterId, nodeId, 0, messageType, subject, body)
 	if err != nil {
 		return err
-	}
-
-	// 发送给媒介接收人 - 节点
-	if nodeId > 0 {
-		err = SharedMessageTaskDAO.CreateMessageTasks(tx, MessageTaskTarget{
-			ClusterId: clusterId,
-			NodeId:    nodeId,
-			ServerId:  0,
-		}, messageType, subject, body)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -158,19 +163,16 @@ func (this *MessageDAO) CreateNodeMessage(tx *dbs.Tx, clusterId int64, nodeId in
 
 // CreateMessage 创建普通消息
 func (this *MessageDAO) CreateMessage(tx *dbs.Tx, adminId int64, userId int64, messageType MessageType, level string, subject string, body string, paramsJSON []byte) error {
-	op := NewMessageOperator()
+	subject = utils.LimitString(subject, 100)
+	body = utils.LimitString(body, 1024)
+
+	var op = NewMessageOperator()
 	op.AdminId = adminId
 	op.UserId = userId
 	op.Type = messageType
 	op.Level = level
 
-	subjectRunes := []rune(subject)
-	if len(subjectRunes) > 100 {
-		op.Subject = string(subjectRunes[:100]) + "..."
-	} else {
-		op.Subject = subject
-	}
-
+	op.Subject = subject
 	op.Body = body
 	if len(paramsJSON) > 0 {
 		op.Params = paramsJSON
@@ -178,7 +180,7 @@ func (this *MessageDAO) CreateMessage(tx *dbs.Tx, adminId int64, userId int64, m
 	op.State = MessageStateEnabled
 	op.IsRead = false
 	op.Day = timeutil.Format("Ymd")
-	op.Hash = this.calHash(subject, body, paramsJSON)
+	op.Hash = this.calHash(nodeconfigs.NodeRoleAdmin, 0, 0, subject, body, paramsJSON)
 	err := this.Save(tx, op)
 	if err != nil {
 		return err
@@ -234,7 +236,7 @@ func (this *MessageDAO) UpdateMessageRead(tx *dbs.Tx, messageId int64, b bool) e
 	if messageId <= 0 {
 		return errors.New("invalid messageId")
 	}
-	op := NewMessageOperator()
+	var op = NewMessageOperator()
 	op.Id = messageId
 	op.IsRead = b
 	err := this.Save(tx, op)
@@ -286,13 +288,14 @@ func (this *MessageDAO) CheckMessageUser(tx *dbs.Tx, messageId int64, adminId in
 }
 
 // 创建消息
-func (this *MessageDAO) createMessage(tx *dbs.Tx, clusterId int64, nodeId int64, messageType MessageType, level string, subject string, body string, paramsJSON []byte) (int64, error) {
+func (this *MessageDAO) createMessage(tx *dbs.Tx, role string, clusterId int64, nodeId int64, messageType MessageType, level string, subject string, body string, paramsJSON []byte) (int64, error) {
 	// TODO 检查同样的消息最近是否发送过
 
 	// 创建新消息
-	op := NewMessageOperator()
+	var op = NewMessageOperator()
 	op.AdminId = 0 // TODO
 	op.UserId = 0  // TODO
+	op.Role = role
 	op.ClusterId = clusterId
 	op.NodeId = nodeId
 	op.Type = messageType
@@ -313,7 +316,7 @@ func (this *MessageDAO) createMessage(tx *dbs.Tx, clusterId int64, nodeId int64,
 	op.State = MessageStateEnabled
 	op.CreatedAt = time.Now().Unix()
 	op.Day = timeutil.Format("Ymd")
-	op.Hash = this.calHash(subject, body, paramsJSON)
+	op.Hash = this.calHash(role, clusterId, nodeId, subject, body, paramsJSON)
 
 	err := this.Save(tx, op)
 	if err != nil {
@@ -323,10 +326,11 @@ func (this *MessageDAO) createMessage(tx *dbs.Tx, clusterId int64, nodeId int64,
 }
 
 // 计算Hash
-func (this *MessageDAO) calHash(subject string, body string, paramsJSON []byte) string {
+func (this *MessageDAO) calHash(role string, clusterId int64, nodeId int64, subject string, body string, paramsJSON []byte) string {
 	h := md5.New()
-	h.Write([]byte(subject))
-	h.Write([]byte(body))
+	h.Write([]byte(role + "@" + types.String(clusterId) + "@" + types.String(nodeId)))
+	h.Write([]byte(subject + "@"))
+	h.Write([]byte(body + "@"))
 	h.Write(paramsJSON)
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

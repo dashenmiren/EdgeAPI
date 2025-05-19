@@ -1,31 +1,35 @@
 package remotelogs
 
 import (
+	"time"
+
+	"github.com/cespare/xxhash"
 	"github.com/dashenmiren/EdgeAPI/internal/configs"
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/logs"
-	"time"
+	"github.com/iwind/TeaGo/types"
 )
 
-var logChan = make(chan *pb.NodeLog, 1024)
+var logChan = make(chan *pb.NodeLog, 64) // 队列数量不需要太长，因为日志通常仅仅为调试用
+var sharedDAO DAOInterface
 
 func init() {
 	// 定期上传日志
-	ticker := time.NewTicker(60 * time.Second)
-	go func() {
+	var ticker = time.NewTicker(60 * time.Second)
+	goman.New(func() {
 		for range ticker.C {
 			err := uploadLogs()
 			if err != nil {
 				logs.Println("[LOG]" + err.Error())
 			}
 		}
-	}()
+	})
 }
 
-// 打印普通信息
+// Println 打印普通信息
 func Println(tag string, description string) {
 	logs.Println("[" + tag + "]" + description)
 
@@ -48,7 +52,7 @@ func Println(tag string, description string) {
 	}
 }
 
-// 打印警告信息
+// Warn 打印警告信息
 func Warn(tag string, description string) {
 	logs.Println("[" + tag + "]" + description)
 
@@ -71,7 +75,7 @@ func Warn(tag string, description string) {
 	}
 }
 
-// 打印错误信息
+// Error 打印错误信息
 func Error(tag string, description string) {
 	logs.Println("[" + tag + "]" + description)
 
@@ -94,15 +98,44 @@ func Error(tag string, description string) {
 	}
 }
 
+// SetDAO 设置存储接口
+func SetDAO(dao DAOInterface) {
+	sharedDAO = dao
+}
+
 // 上传日志
 func uploadLogs() error {
+	if sharedDAO == nil {
+		return nil
+	}
+
+	const hashSize = 10
+	var hashList = []uint64{}
+
 Loop:
 	for {
 		select {
 		case log := <-logChan:
-			err := models.SharedNodeLogDAO.CreateLog(nil, nodeconfigs.NodeRoleAPI, log.NodeId, 0, log.Level, log.Tag, log.Description, log.CreatedAt)
-			if err != nil {
-				return err
+			// 是否已存在
+			var hash = xxhash.Sum64String(types.String(log.NodeId) + "_" + log.Description)
+			var found = false
+			for _, h := range hashList {
+				if h == hash {
+					found = true
+					break
+				}
+			}
+
+			// 加入
+			if !found {
+				hashList = append(hashList, hash)
+				if len(hashList) > hashSize {
+					hashList = hashList[1:]
+				}
+				err := sharedDAO.CreateLog(nil, nodeconfigs.NodeRoleAPI, log.NodeId, log.ServerId, log.OriginId, log.Level, log.Tag, log.Description, log.CreatedAt, "", nil)
+				if err != nil {
+					return err
+				}
 			}
 		default:
 			break Loop

@@ -3,24 +3,31 @@ package tasks
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
+	"time"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/goman"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
-	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
-	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"
-	"time"
+	"github.com/iwind/TeaGo/types"
 )
 
-// 单个集群的健康检查任务
+// HealthCheckClusterTask 单个集群的健康检查任务
 type HealthCheckClusterTask struct {
+	BaseTask
+
 	clusterId int64
 	config    *serverconfigs.HealthCheckConfig
 	ticker    *utils.Ticker
+
+	notifiedTime time.Time
 }
 
-// 创建新任务
+// NewHealthCheckClusterTask 创建新任务
 func NewHealthCheckClusterTask(clusterId int64, config *serverconfigs.HealthCheckConfig) *HealthCheckClusterTask {
 	return &HealthCheckClusterTask{
 		clusterId: clusterId,
@@ -28,26 +35,26 @@ func NewHealthCheckClusterTask(clusterId int64, config *serverconfigs.HealthChec
 	}
 }
 
-// 重置配置
+// Reset 重置配置
 func (this *HealthCheckClusterTask) Reset(config *serverconfigs.HealthCheckConfig) {
 	// 检查是否有变化
 	oldJSON, err := json.Marshal(this.config)
 	if err != nil {
-		logs.Println("[TASK][HEALTH_CHECK]" + err.Error())
+		this.logErr("HealthCheckClusterTask", err.Error())
 		return
 	}
 	newJSON, err := json.Marshal(config)
 	if err != nil {
-		logs.Println("[TASK][HEALTH_CHECK]" + err.Error())
+		this.logErr("HealthCheckClusterTask", err.Error())
 		return
 	}
-	if bytes.Compare(oldJSON, newJSON) != 0 {
+	if !bytes.Equal(oldJSON, newJSON) {
 		this.config = config
 		this.Run()
 	}
 }
 
-// 执行
+// Run 执行
 func (this *HealthCheckClusterTask) Run() {
 	this.Stop()
 
@@ -60,23 +67,23 @@ func (this *HealthCheckClusterTask) Run() {
 	if this.config.Interval == nil {
 		return
 	}
-	duration := this.config.Interval.Duration()
+	var duration = this.config.Interval.Duration()
 	if duration <= 0 {
 		return
 	}
-	ticker := utils.NewTicker(duration)
-	go func() {
+	var ticker = utils.NewTicker(duration)
+	goman.New(func() {
 		for ticker.Wait() {
-			err := this.loop(int64(duration.Seconds()))
+			err := this.Loop()
 			if err != nil {
-				logs.Println("[TASK][HEALTH_CHECK]" + err.Error())
+				this.logErr("HealthCheckClusterTask", err.Error())
 			}
 		}
-	}()
+	})
 	this.ticker = ticker
 }
 
-// 停止
+// Stop 停止
 func (this *HealthCheckClusterTask) Stop() {
 	if this.ticker == nil {
 		return
@@ -85,33 +92,21 @@ func (this *HealthCheckClusterTask) Stop() {
 	this.ticker = nil
 }
 
-// 单个循环任务
-func (this *HealthCheckClusterTask) loop(seconds int64) error {
-	// 检查上次运行时间，防止重复运行
-	settingKey := systemconfigs.SettingCodeClusterHealthCheck + "Loop" + numberutils.FormatInt64(this.clusterId)
-	timestamp := time.Now().Unix()
-	c, err := models.SharedSysSettingDAO.CompareInt64Setting(nil, settingKey, timestamp-seconds)
-	if err != nil {
-		return err
-	}
-	if c > 0 {
+// Loop 单个循环任务
+func (this *HealthCheckClusterTask) Loop() error {
+	// 检查是否为主节点
+	if !this.IsPrimaryNode() {
 		return nil
 	}
 
-	// 记录时间
-	err = models.SharedSysSettingDAO.UpdateSetting(nil, settingKey, []byte(numberutils.FormatInt64(timestamp)))
-	if err != nil {
-		return err
-	}
-
 	// 开始运行
-	executor := NewHealthCheckExecutor(this.clusterId)
+	var executor = NewHealthCheckExecutor(this.clusterId)
 	results, err := executor.Run()
 	if err != nil {
 		return err
 	}
 
-	failedResults := []maps.Map{}
+	var failedResults = []maps.Map{}
 	for _, result := range results {
 		if !result.IsOk {
 			failedResults = append(failedResults, maps.Map{
@@ -127,14 +122,43 @@ func (this *HealthCheckClusterTask) loop(seconds int64) error {
 	}
 
 	if len(failedResults) > 0 {
-		failedResultsJSON, err := json.Marshal(failedResults)
-		if err != nil {
-			return err
-		}
-		message := "有" + numberutils.FormatInt(len(failedResults)) + "个节点在健康检查中出现问题"
-		err = models.NewMessageDAO().CreateClusterMessage(nil, this.clusterId, models.MessageTypeHealthCheckFailed, models.MessageLevelError, message, message, failedResultsJSON)
-		if err != nil {
-			return err
+		// 10分钟内不重复提醒
+		if time.Since(this.notifiedTime) > 10*time.Minute {
+			this.notifiedTime = time.Now()
+
+			failedResultsJSON, err := json.Marshal(failedResults)
+			if err != nil {
+				return err
+			}
+			var subject = "有" + numberutils.FormatInt(len(failedResults)) + "个节点IP在健康检查中出现问题"
+			var message = "有" + numberutils.FormatInt(len(failedResults)) + "个节点IP在健康检查中出现问题："
+			var failedDescriptions = []string{}
+			var failedIndex int
+			for _, result := range results {
+				if result.IsOk || result.Node == nil {
+					continue
+				}
+				failedIndex++
+				failedDescriptions = append(failedDescriptions, "节点"+types.String(failedIndex)+"："+result.Node.Name+"，IP："+result.NodeAddr)
+			}
+
+			const maxNodeDescriptions = 10
+			var isOverMax = false
+			if len(failedDescriptions) > maxNodeDescriptions {
+				failedDescriptions = failedDescriptions[:maxNodeDescriptions]
+				isOverMax = true
+			}
+			message += strings.Join(failedDescriptions, "；")
+			if isOverMax {
+				message += " ..."
+			} else {
+				message += "。"
+			}
+
+			err = models.NewMessageDAO().CreateClusterMessage(nil, nodeconfigs.NodeRoleNode, this.clusterId, models.MessageTypeHealthCheckFailed, models.MessageLevelError, subject, subject, message, failedResultsJSON)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

@@ -77,7 +77,7 @@ func (this *ApiTokenDAO) FindEnabledTokenWithNodeCacheable(tx *dbs.Tx, nodeId st
 		State(ApiTokenStateEnabled).
 		Find()
 	if one != nil {
-		token := one.(*ApiToken)
+		token = one.(*ApiToken)
 		SharedCacheLocker.Lock()
 		apiTokenCacheMap[nodeId] = token
 		SharedCacheLocker.Unlock()
@@ -112,11 +112,21 @@ func (this *ApiTokenDAO) FindEnabledTokenWithRole(tx *dbs.Tx, role string) (*Api
 
 // CreateAPIToken 保存API Token
 func (this *ApiTokenDAO) CreateAPIToken(tx *dbs.Tx, nodeId string, secret string, role nodeconfigs.NodeRole) error {
-	op := NewApiTokenOperator()
+	var op = NewApiTokenOperator()
 	op.NodeId = nodeId
 	op.Secret = secret
 	op.Role = role
 	op.State = ApiTokenStateEnabled
 	err := this.Save(tx, op)
 	return err
+}
+
+// FindAllEnabledAPITokens 读取API令牌
+func (this *ApiTokenDAO) FindAllEnabledAPITokens(tx *dbs.Tx, role string) (result []*ApiToken, err error) {
+	_, err = this.Query(tx).
+		Attr("role", role).
+		State(ApiTokenStateEnabled).
+		Slice(&result).
+		FindAll()
+	return
 }

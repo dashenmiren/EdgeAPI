@@ -1,6 +1,8 @@
 package authority
 
 import (
+	"encoding/json"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
@@ -119,7 +121,7 @@ func (this *AuthorityNodeDAO) CreateAuthorityNode(tx *dbs.Tx, name string, descr
 		return
 	}
 
-	op := NewAuthorityNodeOperator()
+	var op = NewAuthorityNodeOperator()
 	op.IsOn = isOn
 	op.UniqueId = uniqueId
 	op.Secret = secret
@@ -140,7 +142,7 @@ func (this *AuthorityNodeDAO) UpdateAuthorityNode(tx *dbs.Tx, nodeId int64, name
 		return errors.New("invalid nodeId")
 	}
 
-	op := NewAuthorityNodeOperator()
+	var op = NewAuthorityNodeOperator()
 	op.Id = nodeId
 	op.Name = name
 	op.Description = description
@@ -188,13 +190,19 @@ func (this *AuthorityNodeDAO) GenUniqueId(tx *dbs.Tx) (string, error) {
 }
 
 // UpdateNodeStatus 更改节点状态
-func (this *AuthorityNodeDAO) UpdateNodeStatus(tx *dbs.Tx, nodeId int64, statusJSON []byte) error {
-	if statusJSON == nil {
+func (this *AuthorityNodeDAO) UpdateNodeStatus(tx *dbs.Tx, nodeId int64, nodeStatus *nodeconfigs.NodeStatus) error {
+	if nodeStatus == nil {
 		return nil
 	}
-	_, err := this.Query(tx).
+
+	nodeStatusJSON, err := json.Marshal(nodeStatus)
+	if err != nil {
+		return err
+	}
+
+	_, err = this.Query(tx).
 		Pk(nodeId).
-		Set("status", string(statusJSON)).
+		Set("status", nodeStatusJSON).
 		Update()
 	return err
 }
@@ -203,6 +211,7 @@ func (this *AuthorityNodeDAO) UpdateNodeStatus(tx *dbs.Tx, nodeId int64, statusJ
 func (this *AuthorityNodeDAO) CountAllLowerVersionNodes(tx *dbs.Tx, version string) (int64, error) {
 	return this.Query(tx).
 		State(AuthorityNodeStateEnabled).
+		Attr("isOn", true).
 		Where("status IS NOT NULL").
 		Where("(JSON_EXTRACT(status, '$.buildVersionCode') IS NULL OR JSON_EXTRACT(status, '$.buildVersionCode')<:version)").
 		Param("version", utils.VersionToLong(version)).

@@ -3,7 +3,10 @@ package models
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ossconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/sslconfigs"
 	_ "github.com/go-sql-driver/mysql"
@@ -38,12 +41,12 @@ func init() {
 	})
 }
 
-// 初始化
+// Init 初始化
 func (this *OriginDAO) Init() {
 	_ = this.DAOObject.Init()
 }
 
-// 启用条目
+// EnableOrigin 启用条目
 func (this *OriginDAO) EnableOrigin(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -52,7 +55,7 @@ func (this *OriginDAO) EnableOrigin(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// 禁用条目
+// DisableOrigin 禁用条目
 func (this *OriginDAO) DisableOrigin(tx *dbs.Tx, originId int64) error {
 	_, err := this.Query(tx).
 		Pk(originId).
@@ -65,7 +68,7 @@ func (this *OriginDAO) DisableOrigin(tx *dbs.Tx, originId int64) error {
 	return this.NotifyUpdate(tx, originId)
 }
 
-// 查找启用中的条目
+// FindEnabledOrigin 查找启用中的条目
 func (this *OriginDAO) FindEnabledOrigin(tx *dbs.Tx, id int64) (*Origin, error) {
 	result, err := this.Query(tx).
 		Pk(id).
@@ -77,7 +80,7 @@ func (this *OriginDAO) FindEnabledOrigin(tx *dbs.Tx, id int64) (*Origin, error) 
 	return result.(*Origin), err
 }
 
-// 根据主键查找名称
+// FindOriginName 根据主键查找名称
 func (this *OriginDAO) FindOriginName(tx *dbs.Tx, id int64) (string, error) {
 	return this.Query(tx).
 		Pk(id).
@@ -85,9 +88,26 @@ func (this *OriginDAO) FindOriginName(tx *dbs.Tx, id int64) (string, error) {
 		FindStringCol("")
 }
 
-// 创建源站
-func (this *OriginDAO) CreateOrigin(tx *dbs.Tx, adminId int64, userId int64, name string, addrJSON string, description string, weight int32, isOn bool, connTimeout *shared.TimeDuration, readTimeout *shared.TimeDuration, idleTimeout *shared.TimeDuration, maxConns int32, maxIdleConns int32) (originId int64, err error) {
-	op := NewOriginOperator()
+// CreateOrigin 创建源站
+func (this *OriginDAO) CreateOrigin(tx *dbs.Tx,
+	adminId int64,
+	userId int64,
+	name string,
+	addrJSON []byte,
+	ossConfig *ossconfigs.OSSConfig,
+	description string,
+	weight int32, isOn bool,
+	connTimeout *shared.TimeDuration,
+	readTimeout *shared.TimeDuration,
+	idleTimeout *shared.TimeDuration,
+	maxConns int32,
+	maxIdleConns int32,
+	certRef *sslconfigs.SSLCertRef,
+	domains []string,
+	host string,
+	followPort bool,
+	http2Enabled bool) (originId int64, err error) {
+	var op = NewOriginOperator()
 	op.AdminId = adminId
 	op.UserId = userId
 	op.IsOn = isOn
@@ -125,12 +145,47 @@ func (this *OriginDAO) CreateOrigin(tx *dbs.Tx, adminId int64, userId int64, nam
 		op.MaxIdleConns = 0
 	}
 
-	op.Addr = addrJSON
+	if len(addrJSON) > 0 {
+		op.Addr = addrJSON
+	}
+
+	if ossConfig != nil {
+		ossConfigJSON, err := json.Marshal(ossConfig)
+		if err != nil {
+			return 0, err
+		}
+		op.Oss = ossConfigJSON
+	}
+
 	op.Description = description
 	if weight < 0 {
 		weight = 0
 	}
 	op.Weight = weight
+
+	// cert
+	if certRef != nil {
+		certRefJSON, err := json.Marshal(certRef)
+		if err != nil {
+			return 0, err
+		}
+		op.Cert = certRefJSON
+	}
+
+	if len(domains) > 0 {
+		domainsJSON, err := json.Marshal(domains)
+		if err != nil {
+			return 0, err
+		}
+		op.Domains = domainsJSON
+	} else {
+		op.Domains = "[]"
+	}
+
+	op.Host = host
+	op.FollowPort = followPort
+	op.Http2Enabled = http2Enabled
+
 	op.State = OriginStateEnabled
 	err = this.Save(tx, op)
 	if err != nil {
@@ -139,15 +194,44 @@ func (this *OriginDAO) CreateOrigin(tx *dbs.Tx, adminId int64, userId int64, nam
 	return types.Int64(op.Id), nil
 }
 
-// 修改源站
-func (this *OriginDAO) UpdateOrigin(tx *dbs.Tx, originId int64, name string, addrJSON string, description string, weight int32, isOn bool, connTimeout *shared.TimeDuration, readTimeout *shared.TimeDuration, idleTimeout *shared.TimeDuration, maxConns int32, maxIdleConns int32) error {
+// UpdateOrigin 修改源站
+func (this *OriginDAO) UpdateOrigin(tx *dbs.Tx,
+	originId int64,
+	name string,
+	addrJSON []byte,
+	ossConfig *ossconfigs.OSSConfig,
+	description string,
+	weight int32,
+	isOn bool,
+	connTimeout *shared.TimeDuration,
+	readTimeout *shared.TimeDuration,
+	idleTimeout *shared.TimeDuration,
+	maxConns int32,
+	maxIdleConns int32,
+	certRef *sslconfigs.SSLCertRef,
+	domains []string,
+	host string,
+	followPort bool,
+	http2Enabled bool) error {
 	if originId <= 0 {
 		return errors.New("invalid originId")
 	}
-	op := NewOriginOperator()
+	var op = NewOriginOperator()
 	op.Id = originId
 	op.Name = name
+
 	op.Addr = addrJSON
+
+	if ossConfig != nil {
+		ossConfigJSON, err := json.Marshal(ossConfig)
+		if err != nil {
+			return err
+		}
+		op.Oss = ossConfigJSON
+	} else {
+		op.Oss = dbs.SQL("NULL")
+	}
+
 	op.Description = description
 	if weight < 0 {
 		weight = 0
@@ -188,6 +272,32 @@ func (this *OriginDAO) UpdateOrigin(tx *dbs.Tx, originId int64, name string, add
 
 	op.IsOn = isOn
 	op.Version = dbs.SQL("version+1")
+
+	// cert
+	if certRef != nil {
+		certRefJSON, err := json.Marshal(certRef)
+		if err != nil {
+			return err
+		}
+		op.Cert = certRefJSON
+	} else {
+		op.Cert = dbs.SQL("NULL")
+	}
+
+	if len(domains) > 0 {
+		domainsJSON, err := json.Marshal(domains)
+		if err != nil {
+			return err
+		}
+		op.Domains = domainsJSON
+	} else {
+		op.Domains = "[]"
+	}
+
+	op.Host = host
+	op.FollowPort = followPort
+	op.Http2Enabled = http2Enabled
+
 	err := this.Save(tx, op)
 	if err != nil {
 		return err
@@ -196,8 +306,76 @@ func (this *OriginDAO) UpdateOrigin(tx *dbs.Tx, originId int64, name string, add
 	return this.NotifyUpdate(tx, originId)
 }
 
-// 将源站信息转换为配置
-func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverconfigs.OriginConfig, error) {
+// CloneOrigin 复制源站
+func (this *OriginDAO) CloneOrigin(tx *dbs.Tx, fromOriginId int64) (newOriginId int64, err error) {
+	if fromOriginId <= 0 {
+		return
+	}
+	originOne, err := this.Find(tx, fromOriginId)
+	if err != nil || originOne == nil {
+		return
+	}
+	var origin = originOne.(*Origin)
+	var op = NewOriginOperator()
+	op.IsOn = origin.IsOn
+	op.Name = origin.Name
+	op.Version = origin.Version
+	if IsNotNull(origin.Addr) {
+		op.Addr = origin.Addr
+	}
+	op.Description = origin.Description
+	op.Code = origin.Code
+	op.Weight = origin.Weight
+	if IsNotNull(origin.ConnTimeout) {
+		op.ConnTimeout = origin.ConnTimeout
+	}
+	if IsNotNull(origin.ReadTimeout) {
+		op.ReadTimeout = origin.ReadTimeout
+	}
+	if IsNotNull(origin.IdleTimeout) {
+		op.IdleTimeout = origin.IdleTimeout
+	}
+	op.MaxFails = origin.MaxFails
+	op.MaxConns = origin.MaxConns
+	op.MaxIdleConns = origin.MaxIdleConns
+	op.HttpRequestURI = origin.HttpRequestURI
+	if IsNotNull(origin.HttpRequestHeader) {
+		op.HttpRequestHeader = origin.HttpRequestHeader
+	}
+	if IsNotNull(origin.HttpResponseHeader) {
+		op.HttpResponseHeader = origin.HttpResponseHeader
+	}
+	op.Host = origin.Host
+	if IsNotNull(origin.HealthCheck) {
+		op.HealthCheck = origin.HealthCheck
+	}
+	if IsNotNull(origin.Cert) {
+		// TODO 需要Clone证书
+		op.Cert = origin.Cert
+	}
+	if IsNotNull(origin.Ftp) {
+		op.Ftp = origin.Ftp
+	}
+	if IsNotNull(origin.Domains) {
+		op.Domains = origin.Domains
+	}
+	op.FollowPort = origin.FollowPort
+	op.Http2Enabled = origin.Http2Enabled
+	op.State = origin.State
+	return this.SaveInt64(tx, op)
+}
+
+// ComposeOriginConfig 将源站信息转换为配置
+func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64, dataMap *shared.DataMap, cacheMap *utils.CacheMap) (*serverconfigs.OriginConfig, error) {
+	if cacheMap == nil {
+		cacheMap = utils.NewCacheMap()
+	}
+	var cacheKey = this.Table + ":config:" + types.String(originId)
+	var cache, _ = cacheMap.Get(cacheKey)
+	if cache != nil {
+		return cache.(*serverconfigs.OriginConfig), nil
+	}
+
 	origin, err := this.FindEnabledOrigin(tx, originId)
 	if err != nil {
 		return nil, err
@@ -206,9 +384,9 @@ func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverc
 		return nil, nil
 	}
 
-	config := &serverconfigs.OriginConfig{
+	var config = &serverconfigs.OriginConfig{
 		Id:           int64(origin.Id),
-		IsOn:         origin.IsOn == 1,
+		IsOn:         origin.IsOn,
 		Version:      int(origin.Version),
 		Name:         origin.Name,
 		Description:  origin.Description,
@@ -219,20 +397,36 @@ func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverc
 		MaxIdleConns: int(origin.MaxIdleConns),
 		RequestURI:   origin.HttpRequestURI,
 		RequestHost:  origin.Host,
+		Domains:      origin.DecodeDomains(),
+		FollowPort:   origin.FollowPort,
+		HTTP2Enabled: origin.Http2Enabled,
 	}
 
+	// addr
+	var isOSS = false
 	if IsNotNull(origin.Addr) {
-		addr := &serverconfigs.NetworkAddressConfig{}
-		err = json.Unmarshal([]byte(origin.Addr), addr)
+		var addr = &serverconfigs.NetworkAddressConfig{}
+		err = json.Unmarshal(origin.Addr, addr)
 		if err != nil {
 			return nil, err
 		}
 		config.Addr = addr
+		isOSS = ossconfigs.IsOSSProtocol(string(addr.Protocol))
+	}
+
+	// oss
+	if isOSS && IsNotNull(origin.Oss) {
+		var ossConfig = ossconfigs.NewOSSConfig()
+		err = json.Unmarshal(origin.Oss, ossConfig)
+		if err != nil {
+			return nil, err
+		}
+		config.OSS = ossConfig
 	}
 
 	if IsNotNull(origin.ConnTimeout) {
-		connTimeout := &shared.TimeDuration{}
-		err = json.Unmarshal([]byte(origin.ConnTimeout), &connTimeout)
+		var connTimeout = &shared.TimeDuration{}
+		err = json.Unmarshal(origin.ConnTimeout, &connTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -240,8 +434,8 @@ func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverc
 	}
 
 	if IsNotNull(origin.ReadTimeout) {
-		readTimeout := &shared.TimeDuration{}
-		err = json.Unmarshal([]byte(origin.ReadTimeout), &readTimeout)
+		var readTimeout = &shared.TimeDuration{}
+		err = json.Unmarshal(origin.ReadTimeout, &readTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -249,8 +443,8 @@ func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverc
 	}
 
 	if IsNotNull(origin.IdleTimeout) {
-		idleTimeout := &shared.TimeDuration{}
-		err = json.Unmarshal([]byte(origin.IdleTimeout), &idleTimeout)
+		var idleTimeout = &shared.TimeDuration{}
+		err = json.Unmarshal(origin.IdleTimeout, &idleTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +454,7 @@ func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverc
 	// headers
 	if IsNotNull(origin.HttpRequestHeader) {
 		ref := &shared.HTTPHeaderPolicyRef{}
-		err = json.Unmarshal([]byte(origin.HttpRequestHeader), ref)
+		err = json.Unmarshal(origin.HttpRequestHeader, ref)
 		if err != nil {
 			return nil, err
 		}
@@ -278,8 +472,8 @@ func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverc
 	}
 
 	if IsNotNull(origin.HttpResponseHeader) {
-		ref := &shared.HTTPHeaderPolicyRef{}
-		err = json.Unmarshal([]byte(origin.HttpResponseHeader), ref)
+		var ref = &shared.HTTPHeaderPolicyRef{}
+		err = json.Unmarshal(origin.HttpResponseHeader, ref)
 		if err != nil {
 			return nil, err
 		}
@@ -297,8 +491,8 @@ func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverc
 	}
 
 	if IsNotNull(origin.HealthCheck) {
-		healthCheck := &serverconfigs.HealthCheckConfig{}
-		err = json.Unmarshal([]byte(origin.HealthCheck), healthCheck)
+		var healthCheck = &serverconfigs.HealthCheckConfig{}
+		err = json.Unmarshal(origin.HealthCheck, healthCheck)
 		if err != nil {
 			return nil, err
 		}
@@ -306,14 +500,14 @@ func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverc
 	}
 
 	if IsNotNull(origin.Cert) {
-		ref := &sslconfigs.SSLCertRef{}
-		err = json.Unmarshal([]byte(origin.Cert), ref)
+		var ref = &sslconfigs.SSLCertRef{}
+		err = json.Unmarshal(origin.Cert, ref)
 		if err != nil {
 			return nil, err
 		}
 		config.CertRef = ref
 		if ref.CertId > 0 {
-			certConfig, err := SharedSSLCertDAO.ComposeCertConfig(tx, ref.CertId)
+			certConfig, err := SharedSSLCertDAO.ComposeCertConfig(tx, ref.CertId, false, dataMap, cacheMap)
 			if err != nil {
 				return nil, err
 			}
@@ -325,10 +519,38 @@ func (this *OriginDAO) ComposeOriginConfig(tx *dbs.Tx, originId int64) (*serverc
 		// TODO
 	}
 
+	if cacheMap != nil {
+		cacheMap.Put(cacheKey, config)
+	}
+
 	return config, nil
 }
 
-// 通知更新
+// CheckUserOrigin 检查源站权限
+func (this *OriginDAO) CheckUserOrigin(tx *dbs.Tx, userId int64, originId int64) error {
+	reverseProxyId, err := SharedReverseProxyDAO.FindReverseProxyContainsOriginId(tx, originId)
+	if err != nil {
+		return err
+	}
+	if reverseProxyId == 0 {
+		// 这里我们不允许源站没有被使用
+		return ErrNotFound
+	}
+	return SharedReverseProxyDAO.CheckUserReverseProxy(tx, userId, reverseProxyId)
+}
+
+// ExistsOrigin 检查源站是否存在
+func (this *OriginDAO) ExistsOrigin(tx *dbs.Tx, originId int64) (bool, error) {
+	if originId <= 0 {
+		return false, nil
+	}
+	return this.Query(tx).
+		Pk(originId).
+		State(OriginStateEnabled).
+		Exist()
+}
+
+// NotifyUpdate 通知更新
 func (this *OriginDAO) NotifyUpdate(tx *dbs.Tx, originId int64) error {
 	reverseProxyId, err := SharedReverseProxyDAO.FindReverseProxyContainsOriginId(tx, originId)
 	if err != nil {

@@ -1,6 +1,7 @@
 package acme
 
 import (
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -27,17 +28,17 @@ func init() {
 	})
 }
 
-// 生成日志
+// CreateACMETaskLog 生成日志
 func (this *ACMETaskLogDAO) CreateACMETaskLog(tx *dbs.Tx, taskId int64, isOk bool, errMsg string) error {
-	op := NewACMETaskLogOperator()
+	var op = NewACMETaskLogOperator()
 	op.TaskId = taskId
-	op.Error = errMsg
+	op.Error = utils.LimitString(errMsg, 1024)
 	op.IsOk = isOk
 	err := this.Save(tx, op)
 	return err
 }
 
-// 取得任务的最后一条执行日志
+// FindLatestACMETasKLog 取得任务的最后一条执行日志
 func (this *ACMETaskLogDAO) FindLatestACMETasKLog(tx *dbs.Tx, taskId int64) (*ACMETaskLog, error) {
 	one, err := this.Query(tx).
 		Attr("taskId", taskId).

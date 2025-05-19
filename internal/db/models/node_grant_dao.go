@@ -2,6 +2,8 @@ package models
 
 import (
 	"errors"
+
+	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -73,8 +75,8 @@ func (this *NodeGrantDAO) FindNodeGrantName(tx *dbs.Tx, id uint32) (string, erro
 }
 
 // CreateGrant 创建认证信息
-func (this *NodeGrantDAO) CreateGrant(tx *dbs.Tx, adminId int64, name string, method string, username string, password string, privateKey string, description string, nodeId int64) (grantId int64, err error) {
-	op := NewNodeGrantOperator()
+func (this *NodeGrantDAO) CreateGrant(tx *dbs.Tx, adminId int64, name string, method string, username string, password string, privateKey string, passphrase string, description string, nodeId int64, su bool) (grantId int64, err error) {
+	var op = NewNodeGrantOperator()
 	op.AdminId = adminId
 	op.Name = name
 	op.Method = method
@@ -83,9 +85,13 @@ func (this *NodeGrantDAO) CreateGrant(tx *dbs.Tx, adminId int64, name string, me
 	case "user":
 		op.Username = username
 		op.Password = password
-		op.Su = false // TODO 需要做到前端可以配置
 	case "privateKey":
+		op.Username = username
 		op.PrivateKey = privateKey
+		op.Passphrase = passphrase
+	}
+	if username != "root" { // only for non-root user
+		op.Su = su
 	}
 	op.Description = description
 	op.NodeId = nodeId
@@ -95,12 +101,12 @@ func (this *NodeGrantDAO) CreateGrant(tx *dbs.Tx, adminId int64, name string, me
 }
 
 // UpdateGrant 修改认证信息
-func (this *NodeGrantDAO) UpdateGrant(tx *dbs.Tx, grantId int64, name string, method string, username string, password string, privateKey string, description string, nodeId int64) error {
+func (this *NodeGrantDAO) UpdateGrant(tx *dbs.Tx, grantId int64, name string, method string, username string, password string, privateKey string, passphrase string, description string, nodeId int64, su bool) error {
 	if grantId <= 0 {
 		return errors.New("invalid grantId")
 	}
 
-	op := NewNodeGrantOperator()
+	var op = NewNodeGrantOperator()
 	op.Id = grantId
 	op.Name = name
 	op.Method = method
@@ -109,9 +115,15 @@ func (this *NodeGrantDAO) UpdateGrant(tx *dbs.Tx, grantId int64, name string, me
 	case "user":
 		op.Username = username
 		op.Password = password
-		op.Su = false // TODO 需要做到前端可以配置
 	case "privateKey":
+		op.Username = username
 		op.PrivateKey = privateKey
+		op.Passphrase = passphrase
+	}
+	if username != "root" { // only for non-root user
+		op.Su = su
+	} else {
+		op.Su = false
 	}
 	op.Description = description
 	op.NodeId = nodeId
@@ -125,7 +137,7 @@ func (this *NodeGrantDAO) CountAllEnabledGrants(tx *dbs.Tx, keyword string) (int
 		State(NodeGrantStateEnabled)
 	if len(keyword) > 0 {
 		query.Where("(name LIKE :keyword OR username LIKE :keyword OR description LIKE :keyword)").
-			Param("keyword", "%"+keyword+"%")
+			Param("keyword", dbutils.QuoteLike(keyword))
 	}
 	return query.Count()
 }
@@ -136,7 +148,7 @@ func (this *NodeGrantDAO) ListEnabledGrants(tx *dbs.Tx, keyword string, offset i
 		State(NodeGrantStateEnabled)
 	if len(keyword) > 0 {
 		query.Where("(name LIKE :keyword OR username LIKE :keyword OR description LIKE :keyword)").
-			Param("keyword", "%"+keyword+"%")
+			Param("keyword", dbutils.QuoteLike(keyword))
 	}
 	_, err = query.
 		Offset(offset).

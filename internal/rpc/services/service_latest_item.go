@@ -1,9 +1,8 @@
-// Copyright 2021 Liuxiangchao iwind.liu@gmail.com. All rights reserved.
-
 package services
 
 import (
 	"context"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
@@ -15,7 +14,7 @@ type LatestItemService struct {
 
 // IncreaseLatestItem 记录最近使用的条目
 func (this *LatestItemService) IncreaseLatestItem(ctx context.Context, req *pb.IncreaseLatestItemRequest) (*pb.RPCSuccess, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}

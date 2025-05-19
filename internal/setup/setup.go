@@ -2,19 +2,20 @@ package setup
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
 	"github.com/dashenmiren/EdgeAPI/internal/configs"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
-	"github.com/go-yaml/yaml"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/cmd"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
-	"io/ioutil"
-	"os"
-	"strconv"
-	"strings"
+	"gopkg.in/yaml.v3"
 )
 
 type Setup struct {
@@ -23,6 +24,8 @@ type Setup struct {
 	// 要返回的数据
 	AdminNodeId     string
 	AdminNodeSecret string
+
+	logFp *os.File
 }
 
 func NewSetup(config *Config) *Setup {
@@ -32,15 +35,15 @@ func NewSetup(config *Config) *Setup {
 }
 
 func NewSetupFromCmd() *Setup {
-	args := cmd.ParseArgs(strings.Join(os.Args[1:], " "))
+	var args = cmd.ParseArgs(strings.Join(os.Args[1:], " "))
 
-	config := &Config{}
+	var config = &Config{}
 	for _, arg := range args {
-		index := strings.Index(arg, "=")
+		var index = strings.Index(arg, "=")
 		if index <= 0 {
 			continue
 		}
-		value := arg[index+1:]
+		var value = arg[index+1:]
 		value = strings.Trim(value, "\"'")
 		switch arg[:index] {
 		case "-api-node-protocol":
@@ -52,7 +55,18 @@ func NewSetupFromCmd() *Setup {
 		}
 	}
 
-	return NewSetup(config)
+	var setup = NewSetup(config)
+
+	// log writer
+	var tmpDir = os.TempDir()
+	if len(tmpDir) > 0 {
+		fp, err := os.OpenFile(tmpDir+"/edge-install.log", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		if err == nil {
+			setup.logFp = fp
+		}
+	}
+
+	return setup
 }
 
 func (this *Setup) Run() error {
@@ -74,8 +88,8 @@ func (this *Setup) Run() error {
 	}
 
 	// 执行SQL
-	config := &dbs.Config{}
-	configData, err := ioutil.ReadFile(Tea.ConfigFile("db.yaml"))
+	var config = &dbs.Config{}
+	configData, err := os.ReadFile(Tea.ConfigFile("db.yaml"))
 	if err != nil {
 		return err
 	}
@@ -85,21 +99,35 @@ func (this *Setup) Run() error {
 	}
 	for _, db := range config.DBs {
 		// 可以同时运行多条语句
-		db.Dsn += "&multiStatements=true"
+		if !strings.Contains(db.Dsn, "multiStatements=") {
+			if strings.Contains(db.Dsn, "?") {
+				db.Dsn += "&multiStatements=true"
+			} else {
+				db.Dsn += "?multiStatements=true"
+			}
+		}
 	}
 	dbConfig, ok := config.DBs[Tea.Env]
 	if !ok {
 		return errors.New("can not find database config for env '" + Tea.Env + "'")
 	}
 
-	executor := NewSQLExecutor(dbConfig)
-	err = executor.Run()
+	var executor = NewSQLExecutor(dbConfig)
+	if this.logFp != nil {
+		executor.SetLogWriter(this.logFp)
+
+		defer func() {
+			_ = this.logFp.Close()
+			_ = os.Remove(this.logFp.Name())
+		}()
+	}
+	err = executor.Run(false)
 	if err != nil {
 		return err
 	}
 
 	// Admin节点信息
-	apiTokenDAO := models.NewApiTokenDAO()
+	var apiTokenDAO = models.NewApiTokenDAO()
 	token, err := apiTokenDAO.FindEnabledTokenWithRole(nil, "admin")
 	if err != nil {
 		return err
@@ -111,7 +139,7 @@ func (this *Setup) Run() error {
 	this.AdminNodeSecret = token.Secret
 
 	// 检查API节点
-	dao := models.NewAPINodeDAO()
+	var dao = models.NewAPINodeDAO()
 	apiNodeId, err := dao.FindEnabledAPINodeIdWithAddr(nil, this.config.APINodeProtocol, this.config.APINodeHost, this.config.APINodePort)
 	if err != nil {
 		return err
@@ -124,7 +152,7 @@ func (this *Setup) Run() error {
 		}
 		addrsJSON, err := json.Marshal([]*serverconfigs.NetworkAddressConfig{addr})
 		if err != nil {
-			return errors.New("json encode api node addr failed: " + err.Error())
+			return fmt.Errorf("json encode api node addr failed: %w", err)
 		}
 
 		var httpJSON []byte = nil
@@ -134,13 +162,13 @@ func (this *Setup) Run() error {
 			httpConfig.IsOn = true
 			httpConfig.Listen = []*serverconfigs.NetworkAddressConfig{
 				{
-					Protocol:  "https",
+					Protocol:  "http",
 					PortRange: strconv.Itoa(this.config.APINodePort),
 				},
 			}
 			httpJSON, err = json.Marshal(httpConfig)
 			if err != nil {
-				return errors.New("json encode api node http config failed: " + err.Error())
+				return fmt.Errorf("json encode api node http config failed: %w", err)
 			}
 		}
 		if this.config.APINodeProtocol == "https" {
@@ -155,19 +183,19 @@ func (this *Setup) Run() error {
 			}
 			httpsJSON, err = json.Marshal(httpsConfig)
 			if err != nil {
-				return errors.New("json encode api node https config failed: " + err.Error())
+				return fmt.Errorf("json encode api node https config failed: %w", err)
 			}
 		}
 
 		// 创建API节点
 		nodeId, err := dao.CreateAPINode(nil, "默认API节点", "这是默认创建的第一个API节点", httpJSON, httpsJSON, false, nil, nil, addrsJSON, true)
 		if err != nil {
-			return errors.New("create api node in database failed: " + err.Error())
+			return fmt.Errorf("create api node in database failed: %w", err)
 		}
 		apiNodeId = nodeId
 	}
 
-	apiNode, err := dao.FindEnabledAPINode(nil, apiNodeId)
+	apiNode, err := dao.FindEnabledAPINode(nil, apiNodeId, nil)
 	if err != nil {
 		return err
 	}
@@ -176,13 +204,13 @@ func (this *Setup) Run() error {
 	}
 
 	// 保存配置
-	apiConfig := &configs.APIConfig{
+	var apiConfig = &configs.APIConfig{
 		NodeId: apiNode.UniqueId,
 		Secret: apiNode.Secret,
 	}
 	err = apiConfig.WriteFile(Tea.ConfigFile("api.yaml"))
 	if err != nil {
-		return errors.New("save config failed: " + err.Error())
+		return fmt.Errorf("save config failed: %w", err)
 	}
 
 	return nil

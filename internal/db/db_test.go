@@ -3,12 +3,14 @@ package db
 import (
 	"database/sql"
 	"database/sql/driver"
+	"testing"
+	"time"
+
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
-	"testing"
-	"time"
 )
 
 func TestDB_Env(t *testing.T) {
@@ -33,7 +35,7 @@ func TestDB_Instance(t *testing.T) {
 					if err == driver.ErrBadConn {
 						return
 					}
-					t.Fatal(i, "exec:", err)
+					t.Error(i, "exec:", err)
 				}
 				time.Sleep(1 * time.Second)
 			}
@@ -41,4 +43,14 @@ func TestDB_Instance(t *testing.T) {
 		}(db, i)
 	}
 	time.Sleep(100 * time.Second)
+}
+
+func TestDB_Reuse(t *testing.T) {
+	var dao = models.NewVersionDAO()
+	for i := 0; i < 20_000; i++ {
+		_, _, err := dao.Query(nil).Attr("version", i).Reuse(true).FindOne()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }

@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"regexp"
+	"strings"
+	"time"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"golang.org/x/crypto/ssh"
-	"net"
-	"time"
 )
 
 type NodeGrantService struct {
@@ -18,14 +22,14 @@ type NodeGrantService struct {
 
 // CreateNodeGrant 创建认证
 func (this *NodeGrantService) CreateNodeGrant(ctx context.Context, req *pb.CreateNodeGrantRequest) (*pb.CreateNodeGrantResponse, error) {
-	adminId, err := this.ValidateAdmin(ctx, 0)
+	adminId, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	grantId, err := models.SharedNodeGrantDAO.CreateGrant(tx, adminId, req.Name, req.Method, req.Username, req.Password, req.PrivateKey, req.Description, req.NodeId)
+	grantId, err := models.SharedNodeGrantDAO.CreateGrant(tx, adminId, req.Name, req.Method, req.Username, req.Password, req.PrivateKey, req.Passphrase, req.Description, req.NodeId, req.Su)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +40,7 @@ func (this *NodeGrantService) CreateNodeGrant(ctx context.Context, req *pb.Creat
 
 // UpdateNodeGrant 修改认证
 func (this *NodeGrantService) UpdateNodeGrant(ctx context.Context, req *pb.UpdateNodeGrantRequest) (*pb.RPCSuccess, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -45,20 +49,39 @@ func (this *NodeGrantService) UpdateNodeGrant(ctx context.Context, req *pb.Updat
 		return nil, errors.New("wrong grantId")
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	err = models.SharedNodeGrantDAO.UpdateGrant(tx, req.NodeGrantId, req.Name, req.Method, req.Username, req.Password, req.PrivateKey, req.Description, req.NodeId)
+	// 从掩码中恢复密码和私钥
+	grant, err := models.SharedNodeGrantDAO.FindEnabledNodeGrant(tx, req.NodeGrantId)
+	if err != nil {
+		return nil, err
+	}
+	if grant == nil {
+		// do nothing here
+		return this.Success()
+	}
+
+	var maskReg = regexp.MustCompile(`^\*+$`)
+	if len(req.Password) > 0 && maskReg.MatchString(req.Password) {
+		req.Password = grant.Password
+	}
+
+	if len(req.PrivateKey) > 0 && strings.HasSuffix(req.PrivateKey, "********") {
+		req.PrivateKey = grant.PrivateKey
+	}
+
+	err = models.SharedNodeGrantDAO.UpdateGrant(tx, req.NodeGrantId, req.Name, req.Method, req.Username, req.Password, req.PrivateKey, req.Passphrase, req.Description, req.NodeId, req.Su)
 	return this.Success()
 }
 
 // DisableNodeGrant 禁用认证
 func (this *NodeGrantService) DisableNodeGrant(ctx context.Context, req *pb.DisableNodeGrantRequest) (*pb.DisableNodeGrantResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	err = models.SharedNodeGrantDAO.DisableNodeGrant(tx, req.NodeGrantId)
 	return &pb.DisableNodeGrantResponse{}, err
@@ -66,12 +89,12 @@ func (this *NodeGrantService) DisableNodeGrant(ctx context.Context, req *pb.Disa
 
 // CountAllEnabledNodeGrants 计算认证的数量
 func (this *NodeGrantService) CountAllEnabledNodeGrants(ctx context.Context, req *pb.CountAllEnabledNodeGrantsRequest) (*pb.RPCCountResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	count, err := models.SharedNodeGrantDAO.CountAllEnabledGrants(tx, req.Keyword)
 	if err != nil {
@@ -82,12 +105,12 @@ func (this *NodeGrantService) CountAllEnabledNodeGrants(ctx context.Context, req
 
 // ListEnabledNodeGrants 列出单页认证
 func (this *NodeGrantService) ListEnabledNodeGrants(ctx context.Context, req *pb.ListEnabledNodeGrantsRequest) (*pb.ListEnabledNodeGrantsResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	grants, err := models.SharedNodeGrantDAO.ListEnabledGrants(tx, req.Keyword, req.Offset, req.Size)
 	if err != nil {
@@ -113,7 +136,7 @@ func (this *NodeGrantService) ListEnabledNodeGrants(ctx context.Context, req *pb
 
 // FindAllEnabledNodeGrants 列出所有认证信息
 func (this *NodeGrantService) FindAllEnabledNodeGrants(ctx context.Context, req *pb.FindAllEnabledNodeGrantsRequest) (*pb.FindAllEnabledNodeGrantsResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +164,7 @@ func (this *NodeGrantService) FindAllEnabledNodeGrants(ctx context.Context, req 
 
 // FindEnabledNodeGrant 获取单个认证信息
 func (this *NodeGrantService) FindEnabledNodeGrant(ctx context.Context, req *pb.FindEnabledNodeGrantRequest) (*pb.FindEnabledNodeGrantResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +184,7 @@ func (this *NodeGrantService) FindEnabledNodeGrant(ctx context.Context, req *pb.
 		Password:    grant.Password,
 		Su:          grant.Su == 1,
 		PrivateKey:  grant.PrivateKey,
+		Passphrase:  grant.Passphrase,
 		Description: grant.Description,
 		NodeId:      int64(grant.NodeId),
 	}}, nil
@@ -168,7 +192,7 @@ func (this *NodeGrantService) FindEnabledNodeGrant(ctx context.Context, req *pb.
 
 // TestNodeGrant 测试连接
 func (this *NodeGrantService) TestNodeGrant(ctx context.Context, req *pb.TestNodeGrantRequest) (*pb.TestNodeGrantResponse, error) {
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +238,7 @@ func (this *NodeGrantService) TestNodeGrant(ctx context.Context, req *pb.TestNod
 
 	// 认证
 	methods := []ssh.AuthMethod{}
-	if len(grant.Password) > 0 {
+	if grant.Method == "user" {
 		{
 			authMethod := ssh.Password(grant.Password)
 			methods = append(methods, authMethod)
@@ -229,17 +253,27 @@ func (this *NodeGrantService) TestNodeGrant(ctx context.Context, req *pb.TestNod
 			})
 			methods = append(methods, authMethod)
 		}
-	} else {
-		signer, err := ssh.ParsePrivateKey([]byte(grant.PrivateKey))
+	} else if grant.Method == "privateKey" {
+		var signer ssh.Signer
+		if len(grant.Passphrase) != 0 {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase([]byte(grant.PrivateKey), []byte(grant.Passphrase))
+		} else {
+			signer, err = ssh.ParsePrivateKey([]byte(grant.PrivateKey))
+		}
 		if err != nil {
 			resp.Error = "parse private key: " + err.Error()
 			return resp, nil
 		}
 		authMethod := ssh.PublicKeys(signer)
 		methods = append(methods, authMethod)
+	} else {
+		return nil, errors.New("invalid method '" + grant.Method + "'")
 	}
 
 	// SSH客户端
+	if len(grant.Username) == 0 {
+		grant.Username = "root"
+	}
 	config := &ssh.ClientConfig{
 		User:            grant.Username,
 		Auth:            methods,
@@ -247,7 +281,7 @@ func (this *NodeGrantService) TestNodeGrant(ctx context.Context, req *pb.TestNod
 		Timeout:         5 * time.Second, // TODO 后期可以设置这个超时时间
 	}
 
-	sshClient, err := ssh.Dial("tcp", req.Host+":"+fmt.Sprintf("%d", req.Port), config)
+	sshClient, err := ssh.Dial("tcp", configutils.QuoteIP(req.Host)+":"+fmt.Sprintf("%d", req.Port), config)
 	if err != nil {
 		resp.Error = "connect failed: " + err.Error()
 		return resp, nil
@@ -258,4 +292,36 @@ func (this *NodeGrantService) TestNodeGrant(ctx context.Context, req *pb.TestNod
 
 	resp.IsOk = true
 	return resp, nil
+}
+
+// FindSuggestNodeGrants 查找集群推荐的认证
+func (this *NodeGrantService) FindSuggestNodeGrants(ctx context.Context, req *pb.FindSuggestNodeGrantsRequest) (*pb.FindSuggestNodeGrantsResponse, error) {
+	_, err := this.ValidateAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var pbGrants = []*pb.NodeGrant{}
+	var tx = this.NullTx()
+	grantIds, err := models.SharedNodeLoginDAO.FindFrequentGrantIds(tx, req.NodeClusterId, req.NsClusterId)
+	if err != nil {
+		return nil, err
+	}
+	for _, grantId := range grantIds {
+		grant, err := models.SharedNodeGrantDAO.FindEnabledNodeGrant(tx, grantId)
+		if err != nil {
+			return nil, err
+		}
+		if grant != nil {
+			pbGrants = append(pbGrants, &pb.NodeGrant{
+				Id:          int64(grant.Id),
+				Name:        grant.Name,
+				Method:      grant.Method,
+				Username:    grant.Username,
+				Su:          grant.Su == 1,
+				Description: grant.Description,
+			})
+		}
+	}
+	return &pb.FindSuggestNodeGrantsResponse{NodeGrants: pbGrants}, nil
 }

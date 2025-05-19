@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
 )
@@ -16,7 +16,7 @@ type HTTPGzipService struct {
 // CreateHTTPGzip 创建Gzip配置
 func (this *HTTPGzipService) CreateHTTPGzip(ctx context.Context, req *pb.CreateHTTPGzipRequest) (*pb.CreateHTTPGzipResponse, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (this *HTTPGzipService) CreateHTTPGzip(ctx context.Context, req *pb.CreateH
 		}
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	gzipId, err := models.SharedHTTPGzipDAO.CreateGzip(tx, int(req.Level), minLengthJSON, maxLengthJSON, req.CondsJSON)
 	if err != nil {
@@ -56,12 +56,12 @@ func (this *HTTPGzipService) CreateHTTPGzip(ctx context.Context, req *pb.CreateH
 // FindEnabledHTTPGzipConfig 查找Gzip
 func (this *HTTPGzipService) FindEnabledHTTPGzipConfig(ctx context.Context, req *pb.FindEnabledGzipConfigRequest) (*pb.FindEnabledGzipConfigResponse, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	config, err := models.SharedHTTPGzipDAO.ComposeGzipConfig(tx, req.HttpGzipId)
 	if err != nil {
@@ -78,7 +78,7 @@ func (this *HTTPGzipService) FindEnabledHTTPGzipConfig(ctx context.Context, req 
 // UpdateHTTPGzip 修改Gzip配置
 func (this *HTTPGzipService) UpdateHTTPGzip(ctx context.Context, req *pb.UpdateHTTPGzipRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (this *HTTPGzipService) UpdateHTTPGzip(ctx context.Context, req *pb.UpdateH
 		}
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	err = models.SharedHTTPGzipDAO.UpdateGzip(tx, req.HttpGzipId, int(req.Level), minLengthJSON, maxLengthJSON, req.CondsJSON)
 	if err != nil {

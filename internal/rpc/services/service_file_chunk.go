@@ -2,25 +2,34 @@ package services
 
 import (
 	"context"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
-// 文件片段相关服务
+// FileChunkService 文件片段相关服务
 type FileChunkService struct {
 	BaseService
 }
 
-// 创建文件片段
+// CreateFileChunk 创建文件片段
 func (this *FileChunkService) CreateFileChunk(ctx context.Context, req *pb.CreateFileChunkRequest) (*pb.CreateFileChunkResponse, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	_, userId, err := this.ValidateAdminAndUser(ctx, false)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
+
+	// 检查权限
+	if userId > 0 {
+		err = models.SharedFileDAO.CheckUserFile(tx, userId, req.FileId)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	chunkId, err := models.SharedFileChunkDAO.CreateFileChunk(tx, req.FileId, req.Data)
 	if err != nil {
@@ -29,17 +38,18 @@ func (this *FileChunkService) CreateFileChunk(ctx context.Context, req *pb.Creat
 	return &pb.CreateFileChunkResponse{FileChunkId: chunkId}, nil
 }
 
-// 获取的一个文件的所有片段IDs
+// FindAllFileChunkIds 获取的一个文件的所有片段IDs
 func (this *FileChunkService) FindAllFileChunkIds(ctx context.Context, req *pb.FindAllFileChunkIdsRequest) (*pb.FindAllFileChunkIdsResponse, error) {
 	// 校验请求
-	_, _, err := this.ValidateAdminAndUser(ctx, 0, -1)
+	_, _, err := this.ValidateNodeId(ctx, rpcutils.UserTypeNode, rpcutils.UserTypeDNS, rpcutils.UserTypeAdmin, rpcutils.UserTypeUser)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO 校验用户
+	var tx = this.NullTx()
 
-	tx := this.NullTx()
+	// 校验用户
+	// TODO
 
 	chunkIds, err := models.SharedFileChunkDAO.FindAllFileChunkIds(tx, req.FileId)
 	if err != nil {
@@ -48,17 +58,17 @@ func (this *FileChunkService) FindAllFileChunkIds(ctx context.Context, req *pb.F
 	return &pb.FindAllFileChunkIdsResponse{FileChunkIds: chunkIds}, nil
 }
 
-// 下载文件片段
+// DownloadFileChunk 下载文件片段
 func (this *FileChunkService) DownloadFileChunk(ctx context.Context, req *pb.DownloadFileChunkRequest) (*pb.DownloadFileChunkResponse, error) {
 	// 校验请求
-	_, _, err := this.ValidateAdminAndUser(ctx, 0, -1)
+	_, _, err := this.ValidateNodeId(ctx, rpcutils.UserTypeNode, rpcutils.UserTypeDNS, rpcutils.UserTypeAdmin, rpcutils.UserTypeUser)
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO 校验用户
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	chunk, err := models.SharedFileChunkDAO.FindFileChunk(tx, req.FileChunkId)
 	if err != nil {
@@ -67,5 +77,5 @@ func (this *FileChunkService) DownloadFileChunk(ctx context.Context, req *pb.Dow
 	if chunk == nil {
 		return &pb.DownloadFileChunkResponse{FileChunk: nil}, nil
 	}
-	return &pb.DownloadFileChunkResponse{FileChunk: &pb.FileChunk{Data: []byte(chunk.Data)}}, nil
+	return &pb.DownloadFileChunkResponse{FileChunk: &pb.FileChunk{Data: chunk.Data}}, nil
 }

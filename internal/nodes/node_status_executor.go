@@ -2,6 +2,11 @@ package nodes
 
 import (
 	"encoding/json"
+	"os"
+	"runtime"
+	"strings"
+	"time"
+
 	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"github.com/dashenmiren/EdgeAPI/internal/events"
@@ -9,12 +14,8 @@ import (
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/iwind/TeaGo/lists"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/disk"
-	"os"
-	"runtime"
-	"strings"
-	"time"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/disk"
 )
 
 type NodeStatusExecutor struct {
@@ -58,6 +59,8 @@ func (this *NodeStatusExecutor) update() {
 	status.BuildVersionCode = utils.VersionToLong(teaconst.Version)
 	status.OS = runtime.GOOS
 	status.Arch = runtime.GOARCH
+	exe, _ := os.Executable()
+	status.ExePath = exe
 	status.ConfigVersion = 0
 	status.IsActive = true
 	status.ConnectionCount = 0 // TODO 实现连接数计算
@@ -135,8 +138,8 @@ func (this *NodeStatusExecutor) updateDisk(status *nodeconfigs.NodeStatus) {
 	})
 
 	// 当前TeaWeb所在的fs
-	rootFS := ""
-	rootTotal := uint64(0)
+	var rootFS = ""
+	var rootTotal = uint64(0)
 	if lists.ContainsString([]string{"darwin", "linux", "freebsd"}, runtime.GOOS) {
 		for _, p := range partitions {
 			if p.Mountpoint == "/" {
@@ -150,9 +153,9 @@ func (this *NodeStatusExecutor) updateDisk(status *nodeconfigs.NodeStatus) {
 		}
 	}
 
-	total := rootTotal
-	totalUsage := uint64(0)
-	maxUsage := float64(0)
+	var total = rootTotal
+	var totalUsage = uint64(0)
+	var maxUsage = float64(0)
 	for _, partition := range partitions {
 		if runtime.GOOS != "windows" && !strings.Contains(partition.Device, "/") && !strings.Contains(partition.Device, "\\") {
 			continue
@@ -178,6 +181,8 @@ func (this *NodeStatusExecutor) updateDisk(status *nodeconfigs.NodeStatus) {
 		}
 	}
 	status.DiskTotal = total
-	status.DiskUsage = float64(totalUsage) / float64(total)
+	if total > 0 {
+		status.DiskUsage = float64(totalUsage) / float64(total)
+	}
 	status.DiskMaxUsage = maxUsage / 100
 }

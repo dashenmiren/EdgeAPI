@@ -1,19 +1,17 @@
 package configs
 
 import (
-	"fmt"
-	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
-	"github.com/go-yaml/yaml"
-	"github.com/iwind/TeaGo/Tea"
-	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
+	"github.com/iwind/TeaGo/Tea"
+	"gopkg.in/yaml.v3"
 )
 
 var sharedAPIConfig *APIConfig = nil
-var PaddingId string
 
-// API节点配置
+// APIConfig API节点配置
 type APIConfig struct {
 	NodeId string `yaml:"nodeId" json:"nodeId"`
 	Secret string `yaml:"secret" json:"secret"`
@@ -21,7 +19,7 @@ type APIConfig struct {
 	numberId int64 // 数字ID
 }
 
-// 获取共享配置
+// SharedAPIConfig 获取共享配置
 func SharedAPIConfig() (*APIConfig, error) {
 	sharedLocker.Lock()
 	defer sharedLocker.Unlock()
@@ -44,7 +42,7 @@ func SharedAPIConfig() (*APIConfig, error) {
 	var data []byte
 	var err error
 	for _, path := range paths {
-		data, err = ioutil.ReadFile(path)
+		data, err = os.ReadFile(path)
 		if err == nil {
 			if path == localFile {
 				isFromLocal = true
@@ -65,14 +63,14 @@ func SharedAPIConfig() (*APIConfig, error) {
 
 	if !isFromLocal {
 		// 恢复文件
-		_ = ioutil.WriteFile(localFile, data, 0666)
+		_ = os.WriteFile(localFile, data, 0666)
 	}
 
 	// 恢复数据库文件
 	{
 		dbConfigFile := Tea.ConfigFile("db.yaml")
 		_, err := os.Stat(dbConfigFile)
-		if err == nil {
+		if err != nil {
 			paths := []string{}
 			homeDir, homeErr := os.UserHomeDir()
 			if homeErr == nil {
@@ -82,9 +80,9 @@ func SharedAPIConfig() (*APIConfig, error) {
 			for _, path := range paths {
 				_, err := os.Stat(path)
 				if err == nil {
-					data, err := ioutil.ReadFile(path)
+					data, err := os.ReadFile(path)
 					if err == nil {
-						_ = ioutil.WriteFile(dbConfigFile, data, 0666)
+						_ = os.WriteFile(dbConfigFile, data, 0666)
 						break
 					}
 				}
@@ -96,18 +94,18 @@ func SharedAPIConfig() (*APIConfig, error) {
 	return config, nil
 }
 
-// 设置数字ID
+// SetNumberId 设置数字ID
 func (this *APIConfig) SetNumberId(numberId int64) {
 	this.numberId = numberId
-	PaddingId = fmt.Sprintf("%08d", numberId)
+	teaconst.NodeId = numberId
 }
 
-// 获取数字ID
+// NumberId 获取数字ID
 func (this *APIConfig) NumberId() int64 {
 	return this.numberId
 }
 
-// 保存到文件
+// WriteFile 保存到文件
 func (this *APIConfig) WriteFile(path string) error {
 	data, err := yaml.Marshal(this)
 	if err != nil {
@@ -124,14 +122,58 @@ func (this *APIConfig) WriteFile(path string) error {
 	for _, backupDir := range backupDirs {
 		stat, err := os.Stat(backupDir)
 		if err == nil && stat.IsDir() {
-			_ = ioutil.WriteFile(backupDir+"/"+filename, data, 0666)
+			_ = os.WriteFile(backupDir+"/"+filename, data, 0666)
 		} else if err != nil && os.IsNotExist(err) {
 			err = os.Mkdir(backupDir, 0777)
 			if err == nil {
-				_ = ioutil.WriteFile(backupDir+"/"+filename, data, 0666)
+				_ = os.WriteFile(backupDir+"/"+filename, data, 0666)
 			}
 		}
 	}
 
-	return ioutil.WriteFile(path, data, 0666)
+	return os.WriteFile(path, data, 0666)
+}
+
+// ResetAPIConfig 重置配置
+func ResetAPIConfig() error {
+	for _, filename := range []string{"api.yaml", "db.yaml"} {
+		// 重置 configs/api.yaml
+		{
+			var configFile = Tea.ConfigFile(filename)
+			stat, err := os.Stat(configFile)
+			if err == nil && !stat.IsDir() {
+				err = os.Remove(configFile)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// 重置 ~/.edge-api/api.yaml
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr == nil {
+			var configFile = homeDir + "/." + teaconst.ProcessName + "/" + filename
+			stat, err := os.Stat(configFile)
+			if err == nil && !stat.IsDir() {
+				err = os.Remove(configFile)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		// 重置 /etc/edge-api/api.yaml
+		{
+			var configFile = "/etc/" + teaconst.ProcessName + "/" + filename
+			stat, err := os.Stat(configFile)
+			if err == nil && !stat.IsDir() {
+				err = os.Remove(configFile)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }

@@ -1,32 +1,42 @@
 package models
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
+	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/sizes"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/ttlcache"
+	"github.com/dashenmiren/EdgeAPI/internal/zero"
 	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
 	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ddosconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
-	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
+	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
-	"strconv"
-	"strings"
+	timeutil "github.com/iwind/TeaGo/utils/time"
 )
 
 const (
 	NodeStateEnabled  = 1 // 已启用
 	NodeStateDisabled = 0 // 已禁用
 )
-
-var nodeIdCacheMap = map[string]int64{} // uniqueId => nodeId
 
 type NodeDAO dbs.DAO
 
@@ -68,9 +78,7 @@ func (this *NodeDAO) DisableNode(tx *dbs.Tx, nodeId int64) (err error) {
 		return err
 	}
 	if len(uniqueId) > 0 {
-		SharedCacheLocker.Lock()
-		delete(nodeIdCacheMap, uniqueId)
-		SharedCacheLocker.Unlock()
+		ttlcache.SharedCache.Delete("nodeId@uniqueId@" + uniqueId)
 	}
 
 	_, err = this.Query(tx).
@@ -91,7 +99,8 @@ func (this *NodeDAO) DisableNode(tx *dbs.Tx, nodeId int64) (err error) {
 		return err
 	}
 
-	return nil
+	// 删除运行日志
+	return SharedNodeLogDAO.DeleteNodeLogs(tx, nodeconfigs.NodeRoleNode, nodeId)
 }
 
 // FindEnabledNode 查找启用中的条目
@@ -106,6 +115,19 @@ func (this *NodeDAO) FindEnabledNode(tx *dbs.Tx, id int64) (*Node, error) {
 	return result.(*Node), err
 }
 
+// FindEnabledBasicNode 获取节点的基本信息
+func (this *NodeDAO) FindEnabledBasicNode(tx *dbs.Tx, nodeId int64) (*Node, error) {
+	one, err := this.Query(tx).
+		State(NodeStateEnabled).
+		Pk(nodeId).
+		Result("id", "name", "clusterId", "groupId", "isOn", "isUp").
+		Find()
+	if one == nil {
+		return nil, err
+	}
+	return one.(*Node), nil
+}
+
 // FindNodeName 根据主键查找名称
 func (this *NodeDAO) FindNodeName(tx *dbs.Tx, id int64) (string, error) {
 	name, err := this.Query(tx).
@@ -117,6 +139,11 @@ func (this *NodeDAO) FindNodeName(tx *dbs.Tx, id int64) (string, error) {
 
 // CreateNode 创建节点
 func (this *NodeDAO) CreateNode(tx *dbs.Tx, adminId int64, name string, clusterId int64, groupId int64, regionId int64) (nodeId int64, err error) {
+	err = this.CheckNodesLimit(tx)
+	if err != nil {
+		return
+	}
+
 	uniqueId, err := this.GenUniqueId(tx)
 	if err != nil {
 		return 0, err
@@ -130,7 +157,7 @@ func (this *NodeDAO) CreateNode(tx *dbs.Tx, adminId int64, name string, clusterI
 		return
 	}
 
-	op := NewNodeOperator()
+	var op = NewNodeOperator()
 	op.AdminId = adminId
 	op.Name = name
 	op.UniqueId = uniqueId
@@ -139,6 +166,7 @@ func (this *NodeDAO) CreateNode(tx *dbs.Tx, adminId int64, name string, clusterI
 	op.GroupId = groupId
 	op.RegionId = regionId
 	op.IsOn = 1
+	op.EnableIPLists = 1
 	op.State = NodeStateEnabled
 	err = this.Save(tx, op)
 	if err != nil {
@@ -162,26 +190,69 @@ func (this *NodeDAO) CreateNode(tx *dbs.Tx, adminId int64, name string, clusterI
 }
 
 // UpdateNode 修改节点
-func (this *NodeDAO) UpdateNode(tx *dbs.Tx, nodeId int64, name string, clusterId int64, groupId int64, regionId int64, maxCPU int32, isOn bool, maxCacheDiskCapacityJSON []byte, maxCacheMemoryCapacityJSON []byte) error {
+func (this *NodeDAO) UpdateNode(tx *dbs.Tx, nodeId int64, name string, clusterId int64, secondaryClusterIds []int64, groupId int64, regionId int64, isOn bool, level int, lnAddrs []string, enableIPLists bool) error {
 	if nodeId <= 0 {
 		return errors.New("invalid nodeId")
 	}
-	op := NewNodeOperator()
+
+	// 老的集群
+	oldClusterIds, err := this.FindEnabledNodeClusterIds(tx, nodeId)
+	if err != nil {
+		return err
+	}
+
+	// 老的级别
+	oldLevel, err := this.Query(tx).
+		Pk(nodeId).
+		Result("level").
+		FindIntCol(0)
+	if err != nil {
+		return err
+	}
+
+	var op = NewNodeOperator()
 	op.Id = nodeId
 	op.Name = name
 	op.ClusterId = clusterId
+
+	// 去重
+	var filteredSecondaryClusterIds = []int64{}
+	for _, secondaryClusterId := range secondaryClusterIds {
+		if secondaryClusterId <= 0 {
+			continue
+		}
+		if lists.ContainsInt64(filteredSecondaryClusterIds, secondaryClusterId) {
+			continue
+		}
+		filteredSecondaryClusterIds = append(filteredSecondaryClusterIds, secondaryClusterId)
+	}
+	filteredSecondaryClusterIdsJSON, err := json.Marshal(filteredSecondaryClusterIds)
+	if err != nil {
+		return err
+	}
+	op.SecondaryClusterIds = filteredSecondaryClusterIdsJSON
+
 	op.GroupId = groupId
 	op.RegionId = regionId
 	op.LatestVersion = dbs.SQL("latestVersion+1")
-	op.MaxCPU = maxCPU
 	op.IsOn = isOn
-	if len(maxCacheDiskCapacityJSON) > 0 {
-		op.MaxCacheDiskCapacity = maxCacheDiskCapacityJSON
+
+	if teaconst.IsPlus {
+		op.Level = level
+
+		if lnAddrs == nil {
+			lnAddrs = []string{}
+		}
+		lnAddrsJSON, err := json.Marshal(lnAddrs)
+		if err != nil {
+			return err
+		}
+		op.LnAddrs = lnAddrsJSON
 	}
-	if len(maxCacheMemoryCapacityJSON) > 0 {
-		op.MaxCacheMemoryCapacity = maxCacheMemoryCapacityJSON
-	}
-	err := this.Save(tx, op)
+
+	op.EnableIPLists = enableIPLists
+
+	err = this.Save(tx, op)
 	if err != nil {
 		return err
 	}
@@ -189,6 +260,24 @@ func (this *NodeDAO) UpdateNode(tx *dbs.Tx, nodeId int64, name string, clusterId
 	err = this.NotifyUpdate(tx, nodeId)
 	if err != nil {
 		return err
+	}
+
+	// 通知老的集群DNS更新
+	for _, oldClusterId := range oldClusterIds {
+		if oldClusterId != clusterId && !lists.ContainsInt64(secondaryClusterIds, oldClusterId) {
+			err = dns.SharedDNSTaskDAO.CreateClusterTask(tx, oldClusterId, dns.DNSTaskTypeClusterChange)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// 通知子级级别变更
+	if oldLevel > 1 || level > 1 {
+		err = this.NotifyLevelUpdate(tx, nodeId)
+		if err != nil {
+			return err
+		}
 	}
 
 	return this.NotifyDNSUpdate(tx, nodeId)
@@ -203,18 +292,48 @@ func (this *NodeDAO) CountAllEnabledNodes(tx *dbs.Tx) (int64, error) {
 		Count()
 }
 
+// CountAllEnabledOfflineNodes 计算所有离线节点数量
+func (this *NodeDAO) CountAllEnabledOfflineNodes(tx *dbs.Tx) (int64, error) {
+	return this.Query(tx).
+		State(NodeStateEnabled).
+		Attr("isOn", true).
+		Where("clusterId IN (SELECT id FROM "+SharedNodeClusterDAO.Table+" WHERE state=:clusterState)").
+		Param("clusterState", NodeClusterStateEnabled).
+		Where("(status IS NULL OR NOT JSON_EXTRACT(status, '$.isActive') OR UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')>60)").
+		Count()
+}
+
 // ListEnabledNodesMatch 列出单页节点
-func (this *NodeDAO) ListEnabledNodesMatch(tx *dbs.Tx, offset int64, size int64, clusterId int64, installState configutils.BoolState, activeState configutils.BoolState, keyword string, groupId int64, regionId int64) (result []*Node, err error) {
+func (this *NodeDAO) ListEnabledNodesMatch(tx *dbs.Tx,
+	clusterId int64,
+	installState configutils.BoolState,
+	activeState configutils.BoolState,
+	keyword string,
+	groupId int64,
+	regionId int64,
+	level int32,
+	includeSecondaryNodes bool,
+	order string,
+	offset int64,
+	size int64) (result []*Node, err error) {
 	query := this.Query(tx).
+		Result(this.Table + ".*"). // must have table name for table joins below
 		State(NodeStateEnabled).
 		Offset(offset).
 		Limit(size).
-		DescPk().
 		Slice(&result)
 
 	// 集群
 	if clusterId > 0 {
-		query.Attr("clusterId", clusterId)
+		if includeSecondaryNodes {
+			query.Where("("+this.Table+".clusterId=:primaryClusterId OR JSON_CONTAINS(secondaryClusterIds, :primaryClusterIdString))").
+				Param("primaryClusterId", clusterId).
+				Param("primaryClusterIdString", types.String(clusterId))
+		} else {
+			query.Attr(this.Table+".clusterId", clusterId)
+		}
+	} else {
+		query.Where(this.Table + ".clusterId IN (SELECT id FROM " + SharedNodeClusterDAO.Table + " WHERE state=1)")
 	}
 
 	// 安装状态
@@ -232,26 +351,118 @@ func (this *NodeDAO) ListEnabledNodesMatch(tx *dbs.Tx, offset int64, size int64,
 	case configutils.BoolStateAll:
 		// 所有
 	case configutils.BoolStateYes:
-		query.Where("JSON_EXTRACT(status, '$.isActive') AND UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')<=60")
+		query.Where("isActive AND UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')<=60")
 	case configutils.BoolStateNo:
 		query.Where("(status IS NULL OR NOT JSON_EXTRACT(status, '$.isActive') OR UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')>60)")
 	}
 
 	// 关键词
 	if len(keyword) > 0 {
-		query.Where("(name LIKE :keyword OR JSON_EXTRACT(status,'$.hostname') LIKE :keyword OR id IN (SELECT nodeId FROM "+SharedNodeIPAddressDAO.Table+" WHERE ip LIKE :keyword))").
-			Param("keyword", "%"+keyword+"%")
+		query.Where("(name LIKE :keyword OR JSON_EXTRACT(status,'$.hostname') LIKE :keyword OR "+this.Table+".id IN (SELECT nodeId FROM "+SharedNodeIPAddressDAO.Table+" WHERE ip LIKE :keyword))").
+			Param("keyword", dbutils.QuoteLike(keyword))
 	}
 
 	// 分组
 	if groupId > 0 {
 		query.Attr("groupId", groupId)
+	} else if groupId < 0 {
+		query.Attr("groupId", 0)
 	}
 
 	// 区域
 	if regionId > 0 {
 		query.Attr("regionId", regionId)
 	}
+
+	// 级别
+	if level > 0 {
+		query.Attr("level", level)
+	}
+
+	// 排序
+	var minute = timeutil.FormatTime("YmdHi", time.Now().Unix()-60)
+	var nodeValueTable = SharedNodeValueDAO.Table
+	var valueItem = ""
+	var valueField = ""
+	var isAsc = false
+	var ifNullValue int64 = 0
+	switch order {
+	case "cpuAsc":
+		valueItem = "cpu"
+		valueField = "usage"
+		isAsc = true
+		ifNullValue = 100
+	case "cpuDesc":
+		valueItem = "cpu"
+		valueField = "usage"
+		isAsc = false
+		ifNullValue = -1
+	case "memoryAsc":
+		valueItem = "memory"
+		valueField = "usage"
+		isAsc = true
+		ifNullValue = 100
+	case "memoryDesc":
+		valueItem = "memory"
+		valueField = "usage"
+		isAsc = false
+		ifNullValue = -1
+	case "trafficInAsc":
+		valueItem = "trafficIn"
+		valueField = "total"
+		isAsc = true
+		ifNullValue = 60 * sizes.G
+	case "trafficInDesc":
+		valueItem = "trafficIn"
+		valueField = "total"
+		isAsc = false
+		ifNullValue = -1
+	case "trafficOutAsc":
+		valueItem = "trafficOut"
+		valueField = "total"
+		isAsc = true
+		ifNullValue = sizes.G
+	case "trafficOutDesc":
+		valueItem = "trafficOut"
+		valueField = "total"
+		isAsc = false
+		ifNullValue = -1
+	case "loadAsc":
+		valueItem = "load"
+		valueField = "load1m"
+		isAsc = true
+		ifNullValue = 1000
+	case "loadDesc":
+		valueItem = "load"
+		valueField = "load1m"
+		isAsc = false
+		ifNullValue = -1
+	case "connectionsAsc":
+		valueItem = "connections"
+		valueField = "total"
+		isAsc = true
+		ifNullValue = 1000
+	case "connectionsDesc":
+		valueItem = "connections"
+		valueField = "total"
+		isAsc = false
+		ifNullValue = -1
+	default:
+		query.Desc("level")
+	}
+
+	if len(valueItem) > 0 {
+		query.Join(SharedNodeValueDAO, dbs.QueryJoinLeft, this.Table+".id="+nodeValueTable+".nodeId AND "+nodeValueTable+".role='"+nodeconfigs.NodeRoleNode+"' AND "+nodeValueTable+".item='"+valueItem+"' "+" AND "+nodeValueTable+".minute=:minute")
+		query.Param("minute", minute)
+		var ifNullSQL = "IFNULL(CAST(JSON_EXTRACT(value, '$." + valueField + "') AS DECIMAL (20, 6)), " + types.String(ifNullValue) + ")"
+		if isAsc {
+			query.Asc(ifNullSQL)
+		} else {
+			query.Desc(ifNullSQL)
+		}
+	}
+
+	query.DescPk()
 
 	_, err = query.FindAll()
 	return
@@ -295,12 +506,160 @@ func (this *NodeDAO) FindNodeClusterId(tx *dbs.Tx, nodeId int64) (int64, error) 
 	return types.Int64(col), err
 }
 
+// FindNodeLevel 获取节点级别
+func (this *NodeDAO) FindNodeLevel(tx *dbs.Tx, nodeId int64) (int, error) {
+	level, err := this.Query(tx).
+		Pk(nodeId).
+		Result("level").
+		FindIntCol(0)
+	if err != nil {
+		return 0, err
+	}
+	if level < 1 {
+		level = 1
+	}
+	return level, nil
+}
+
+// FindNodeLevelInfo 获取节点级别相关信息
+func (this *NodeDAO) FindNodeLevelInfo(tx *dbs.Tx, nodeId int64) (*Node, error) {
+	one, err := this.Query(tx).
+		Pk(nodeId).
+		Result("id", "clusterId", "secondaryClusterIds", "groupId", "level").
+		Find()
+	if err != nil || one == nil {
+		return nil, err
+	}
+	var node = one.(*Node)
+	if node.Level < 1 {
+		node.Level = 1
+	}
+	return node, nil
+}
+
+// FindEnabledAndOnNodeClusterIds 获取节点所属所有可用而且启用的集群ID
+func (this *NodeDAO) FindEnabledAndOnNodeClusterIds(tx *dbs.Tx, nodeId int64) (result []int64, err error) {
+	one, err := this.Query(tx).
+		Pk(nodeId).
+		Result("clusterId", "secondaryClusterIds").
+		Find()
+	if one == nil {
+		return nil, err
+	}
+	var clusterId = int64(one.(*Node).ClusterId)
+	if clusterId > 0 {
+		result = append(result, clusterId)
+	}
+
+	for _, clusterId := range one.(*Node).DecodeSecondaryClusterIds() {
+		if lists.ContainsInt64(result, clusterId) {
+			continue
+		}
+
+		// 检查是否启用
+		isOn, err := SharedNodeClusterDAO.CheckNodeClusterIsOn(tx, clusterId)
+		if err != nil {
+			return nil, err
+		}
+		if !isOn {
+			continue
+		}
+
+		result = append(result, clusterId)
+	}
+	return
+}
+
+// FindEnabledNodeClusterIds 获取节点所属所有可用的集群ID
+func (this *NodeDAO) FindEnabledNodeClusterIds(tx *dbs.Tx, nodeId int64) (result []int64, err error) {
+	one, err := this.Query(tx).
+		Pk(nodeId).
+		Result("clusterId", "secondaryClusterIds").
+		Find()
+	if one == nil {
+		return nil, err
+	}
+	var clusterId = int64(one.(*Node).ClusterId)
+	if clusterId > 0 {
+		result = append(result, clusterId)
+	}
+
+	for _, secondaryClusterId := range one.(*Node).DecodeSecondaryClusterIds() {
+		if lists.ContainsInt64(result, secondaryClusterId) {
+			continue
+		}
+
+		result = append(result, secondaryClusterId)
+	}
+	return
+}
+
+// FindEnabledNodeIdsWithClusterId 查找某个集群下的所有节点IDs
+func (this *NodeDAO) FindEnabledNodeIdsWithClusterId(tx *dbs.Tx, clusterId int64) ([]int64, error) {
+	ones, err := this.Query(tx).
+		Attr("clusterId", clusterId).
+		State(NodeClusterStateEnabled).
+		ResultPk().
+		FindAll()
+	if err != nil {
+		return nil, err
+	}
+	var result = []int64{}
+	for _, one := range ones {
+		result = append(result, int64(one.(*Node).Id))
+	}
+	return result, nil
+}
+
+// FindEnabledNodesWithGroupIdAndLevel 查找当前分组下的某个级别的所有节点
+func (this *NodeDAO) FindEnabledNodesWithGroupIdAndLevel(tx *dbs.Tx, groupId int64, level int) (result []*Node, err error) {
+	if groupId <= 0 {
+		return
+	}
+	_, err = this.Query(tx).
+		State(NodeStateEnabled).
+		Result("id", "clusterId", "secondaryClusterIds", "uniqueId", "secret", "lnAddrs").
+		Attr("isOn", true).
+		Attr("groupId", groupId).
+		Attr("level", level).
+		Slice(&result).
+		FindAll()
+	return
+}
+
+// FindEnabledNodesWithClusterIdAndLevel 查找当前集群下的某个级别的所有节点
+func (this *NodeDAO) FindEnabledNodesWithClusterIdAndLevel(tx *dbs.Tx, clusterId int64, level int) (result []*Node, err error) {
+	if clusterId <= 0 {
+		return
+	}
+	_, err = this.Query(tx).
+		State(NodeStateEnabled).
+		Result("id", "clusterId", "secondaryClusterIds", "uniqueId", "secret").
+		Attr("isOn", true).
+		Where("(clusterId=:primaryClusterId OR JSON_CONTAINS(secondaryClusterIds, :primaryClusterIdString))").
+		Param("primaryClusterId", clusterId).
+		Param("primaryClusterIdString", types.String(clusterId)).
+		Attr("groupId", 0). // 需要去掉已经有分组的
+		Attr("level", level).
+		Slice(&result).
+		FindAll()
+	return
+}
+
 // FindAllNodeIdsMatch 匹配节点并返回节点ID
-func (this *NodeDAO) FindAllNodeIdsMatch(tx *dbs.Tx, clusterId int64, isOn configutils.BoolState) (result []int64, err error) {
-	query := this.Query(tx)
+func (this *NodeDAO) FindAllNodeIdsMatch(tx *dbs.Tx, clusterId int64, includeSecondaryNodes bool, isOn configutils.BoolState) (result []int64, err error) {
+	var query = this.Query(tx)
 	query.State(NodeStateEnabled)
 	if clusterId > 0 {
-		query.Attr("clusterId", clusterId)
+		if includeSecondaryNodes {
+			query.Where("(clusterId=:primaryClusterId OR JSON_CONTAINS(secondaryClusterIds, :primaryClusterIdString))").
+				Param("primaryClusterId", clusterId).
+				Param("primaryClusterIdString", types.String(clusterId))
+		} else {
+			query.Attr("clusterId", clusterId)
+		}
+	} else {
+		query.Where("clusterId IN (SELECT id FROM " + SharedNodeClusterDAO.Table + " WHERE state=1)")
 	}
 	if isOn == configutils.BoolStateYes {
 		query.Attr("isOn", true)
@@ -319,13 +678,64 @@ func (this *NodeDAO) FindAllNodeIdsMatch(tx *dbs.Tx, clusterId int64, isOn confi
 }
 
 // FindAllEnabledNodesWithClusterId 获取一个集群的所有节点
-func (this *NodeDAO) FindAllEnabledNodesWithClusterId(tx *dbs.Tx, clusterId int64) (result []*Node, err error) {
-	_, err = this.Query(tx).
+func (this *NodeDAO) FindAllEnabledNodesWithClusterId(tx *dbs.Tx, clusterId int64, includeSecondary bool) (result []*Node, err error) {
+	var query = this.Query(tx)
+
+	if includeSecondary {
+		query.Where("(clusterId=:primaryClusterId OR JSON_CONTAINS(secondaryClusterIds, :primaryClusterIdString))").
+			Param("primaryClusterId", clusterId).
+			Param("primaryClusterIdString", types.String(clusterId))
+	} else {
+		query.Attr("clusterId", clusterId)
+	}
+
+	_, err = query.
 		State(NodeStateEnabled).
-		Attr("clusterId", clusterId).
 		DescPk().
 		Slice(&result).
 		FindAll()
+
+	return
+}
+
+// FindEnabledAndOnNodeIdsWithClusterId 查找某个集群下的所有启用的节点IDs
+func (this *NodeDAO) FindEnabledAndOnNodeIdsWithClusterId(tx *dbs.Tx, clusterId int64, includeSecondary bool) ([]int64, error) {
+	var query = this.Query(tx)
+	if includeSecondary {
+		query.Where("(clusterId=:primaryClusterId OR JSON_CONTAINS(secondaryClusterIds, :primaryClusterIdString))").
+			Param("primaryClusterId", clusterId).
+			Param("primaryClusterIdString", types.String(clusterId))
+	} else {
+		query.Attr("clusterId", clusterId)
+	}
+	ones, err := query.
+		Attr("isOn", true).
+		State(NodeStateEnabled).
+		ResultPk().
+		FindAll()
+	if err != nil {
+		return nil, err
+	}
+	var result = []int64{}
+	for _, one := range ones {
+		result = append(result, int64(one.(*Node).Id))
+	}
+	return result, nil
+}
+
+// FindAllEnabledNodeIdsWithClusterId 获取一个集群的所有节点Ids
+func (this *NodeDAO) FindAllEnabledNodeIdsWithClusterId(tx *dbs.Tx, clusterId int64) (result []int64, err error) {
+	ones, err := this.Query(tx).
+		ResultPk().
+		State(NodeStateEnabled).
+		Attr("clusterId", clusterId).
+		FindAll()
+	if err != nil {
+		return nil, err
+	}
+	for _, one := range ones {
+		result = append(result, int64(one.(*Node).Id))
+	}
 	return
 }
 
@@ -333,11 +743,11 @@ func (this *NodeDAO) FindAllEnabledNodesWithClusterId(tx *dbs.Tx, clusterId int6
 func (this *NodeDAO) FindAllInactiveNodesWithClusterId(tx *dbs.Tx, clusterId int64) (result []*Node, err error) {
 	_, err = this.Query(tx).
 		State(NodeStateEnabled).
+		Result("id", "name", "status").
 		Attr("clusterId", clusterId).
-		Attr("isOn", true). // 只监控启用的节点
+		Attr("isOn", true).        // 只监控启用的节点
 		Attr("isInstalled", true). // 只监控已经安装的节点
-		Attr("isActive", true). // 当前已经在线的
-		Where("(status IS NULL OR (JSON_EXTRACT(status, '$.isActive')=false AND UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')>10) OR  UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')>120)").
+		Attr("isActive", false).
 		Result("id", "name").
 		Slice(&result).
 		FindAll()
@@ -345,13 +755,29 @@ func (this *NodeDAO) FindAllInactiveNodesWithClusterId(tx *dbs.Tx, clusterId int
 }
 
 // CountAllEnabledNodesMatch 计算节点数量
-func (this *NodeDAO) CountAllEnabledNodesMatch(tx *dbs.Tx, clusterId int64, installState configutils.BoolState, activeState configutils.BoolState, keyword string, groupId int64, regionId int64) (int64, error) {
+func (this *NodeDAO) CountAllEnabledNodesMatch(tx *dbs.Tx,
+	clusterId int64,
+	installState configutils.BoolState,
+	activeState configutils.BoolState,
+	keyword string,
+	groupId int64,
+	regionId int64,
+	level int32,
+	includeSecondaryNodes bool) (int64, error) {
 	query := this.Query(tx)
 	query.State(NodeStateEnabled)
 
 	// 集群
 	if clusterId > 0 {
-		query.Attr("clusterId", clusterId)
+		if includeSecondaryNodes {
+			query.Where("(clusterId=:primaryClusterId OR JSON_CONTAINS(secondaryClusterIds, :primaryClusterIdString))").
+				Param("primaryClusterId", clusterId).
+				Param("primaryClusterIdString", types.String(clusterId))
+		} else {
+			query.Attr("clusterId", clusterId)
+		}
+	} else {
+		query.Where("clusterId IN (SELECT id FROM " + SharedNodeClusterDAO.Table + " WHERE state=1)")
 	}
 
 	// 安装状态
@@ -369,7 +795,7 @@ func (this *NodeDAO) CountAllEnabledNodesMatch(tx *dbs.Tx, clusterId int64, inst
 	case configutils.BoolStateAll:
 		// 所有
 	case configutils.BoolStateYes:
-		query.Where("JSON_EXTRACT(status, '$.isActive') AND UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')<=60")
+		query.Where("isActive AND UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')<=60")
 	case configutils.BoolStateNo:
 		query.Where("(status IS NULL OR NOT JSON_EXTRACT(status, '$.isActive') OR UNIX_TIMESTAMP()-JSON_EXTRACT(status, '$.updatedAt')>60)")
 	}
@@ -377,12 +803,14 @@ func (this *NodeDAO) CountAllEnabledNodesMatch(tx *dbs.Tx, clusterId int64, inst
 	// 关键词
 	if len(keyword) > 0 {
 		query.Where("(name LIKE :keyword OR JSON_EXTRACT(status,'$.hostname') LIKE :keyword OR id IN (SELECT nodeId FROM "+SharedNodeIPAddressDAO.Table+" WHERE ip LIKE :keyword))").
-			Param("keyword", "%"+keyword+"%")
+			Param("keyword", dbutils.QuoteLike(keyword))
 	}
 
 	// 分组
 	if groupId > 0 {
 		query.Attr("groupId", groupId)
+	} else if groupId < 0 {
+		query.Attr("groupId", 0)
 	}
 
 	// 区域
@@ -390,16 +818,48 @@ func (this *NodeDAO) CountAllEnabledNodesMatch(tx *dbs.Tx, clusterId int64, inst
 		query.Attr("regionId", regionId)
 	}
 
+	// 级别
+	if level > 0 {
+		query.Attr("level", level)
+	}
+
 	return query.Count()
 }
 
 // UpdateNodeStatus 更改节点状态
-func (this *NodeDAO) UpdateNodeStatus(tx *dbs.Tx, nodeId int64, statusJSON []byte) error {
-	_, err := this.Query(tx).
+func (this *NodeDAO) UpdateNodeStatus(tx *dbs.Tx, nodeId int64, nodeStatus *nodeconfigs.NodeStatus) error {
+	if nodeStatus == nil {
+		return nil
+	}
+
+	nodeStatusJSON, err := json.Marshal(nodeStatus)
+	if err != nil {
+		return err
+	}
+
+	_, err = this.Query(tx).
 		Pk(nodeId).
-		Set("status", string(statusJSON)).
+		Set("isActive", true).
+		Set("status", nodeStatusJSON).
 		Update()
-	return err
+	if err != nil {
+		return err
+	}
+
+	// 自动设置安装状态
+	isInstalled, err := this.Query(tx).
+		Pk(nodeId).
+		Result("isInstalled").
+		FindBoolCol()
+	if err != nil {
+		return err
+	}
+
+	if !isInstalled {
+		return this.UpdateNodeIsInstalled(tx, nodeId, true)
+	}
+
+	return nil
 }
 
 // FindNodeStatus 获取节点状态
@@ -423,9 +883,28 @@ func (this *NodeDAO) FindNodeStatus(tx *dbs.Tx, nodeId int64) (*nodeconfigs.Node
 	return status, nil
 }
 
+// UpdateNodeIsOn 修改节点启用状态
+func (this *NodeDAO) UpdateNodeIsOn(tx *dbs.Tx, nodeId int64, isOn bool) error {
+	if nodeId <= 0 {
+		return errors.New("invalid nodeId")
+	}
+	err := this.Query(tx).
+		Pk(nodeId).
+		Set("isOn", isOn).
+		UpdateQuickly()
+	if err != nil {
+		return err
+	}
+
+	return this.NotifyDNSUpdate(tx, nodeId)
+}
+
 // UpdateNodeIsActive 更改节点在线状态
 func (this *NodeDAO) UpdateNodeIsActive(tx *dbs.Tx, nodeId int64, isActive bool) error {
-	b := "true"
+	if nodeId <= 0 {
+		return errors.New("invalid nodeId")
+	}
+	var b = "true"
 	if !isActive {
 		b = "false"
 	}
@@ -439,12 +918,18 @@ func (this *NodeDAO) UpdateNodeIsActive(tx *dbs.Tx, nodeId int64, isActive bool)
 
 // UpdateNodeIsInstalled 设置节点安装状态
 func (this *NodeDAO) UpdateNodeIsInstalled(tx *dbs.Tx, nodeId int64, isInstalled bool) error {
+	if nodeId <= 0 {
+		return errors.New("invalid nodeId")
+	}
 	_, err := this.Query(tx).
 		Pk(nodeId).
 		Set("isInstalled", isInstalled).
 		Set("installStatus", "null"). // 重置安装状态
 		Update()
-	return err
+	if err != nil {
+		return err
+	}
+	return this.NotifyDNSUpdate(tx, nodeId)
 }
 
 // FindNodeInstallStatus 查询节点的安装状态
@@ -461,13 +946,13 @@ func (this *NodeDAO) FindNodeInstallStatus(tx *dbs.Tx, nodeId int64) (*NodeInsta
 	}
 
 	installStatus := node.(*Node).InstallStatus
-	isInstalled := node.(*Node).IsInstalled == 1
+	isInstalled := node.(*Node).IsInstalled
 	if len(installStatus) == 0 {
 		return NewNodeInstallStatus(), nil
 	}
 
 	status := &NodeInstallStatus{}
-	err = json.Unmarshal([]byte(installStatus), status)
+	err = json.Unmarshal(installStatus, status)
 	if err != nil {
 		return nil, err
 	}
@@ -501,7 +986,16 @@ func (this *NodeDAO) UpdateNodeInstallStatus(tx *dbs.Tx, nodeId int64, status *N
 
 // ComposeNodeConfig 组合配置
 // TODO 提升运行速度
-func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64) (*nodeconfigs.NodeConfig, error) {
+func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64, dataMap *shared.DataMap, cacheMap *utils.CacheMap) (*nodeconfigs.NodeConfig, error) {
+	if cacheMap == nil {
+		cacheMap = utils.NewCacheMap()
+	}
+
+	// 放入到缓存中，以便于后面继续使用
+	if dataMap != nil {
+		cacheMap.Put("DataMap", dataMap)
+	}
+
 	node, err := this.FindEnabledNode(tx, nodeId)
 	if err != nil {
 		return nil, err
@@ -510,16 +1004,54 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64) (*nodeconfigs.N
 		return nil, errors.New("node not found '" + strconv.FormatInt(nodeId, 10) + "'")
 	}
 
-	config := &nodeconfigs.NodeConfig{
-		Id:       int64(node.Id),
-		NodeId:   node.UniqueId,
-		IsOn:     node.IsOn == 1,
-		Servers:  nil,
-		Version:  int64(node.Version),
-		Name:     node.Name,
-		MaxCPU:   types.Int32(node.MaxCPU),
-		RegionId: int64(node.RegionId),
+	if node.Level < 1 {
+		node.Level = 1
 	}
+
+	var config = &nodeconfigs.NodeConfig{
+		Id:            int64(node.Id),
+		Edition:       teaconst.Edition,
+		NodeId:        node.UniqueId,
+		Secret:        node.Secret,
+		IsOn:          node.IsOn,
+		Servers:       nil,
+		Version:       int64(node.Version),
+		Name:          node.Name,
+		MaxCPU:        types.Int32(node.MaxCPU),
+		RegionId:      int64(node.RegionId),
+		Level:         types.Int32(node.Level),
+		GroupId:       int64(node.GroupId),
+		EnableIPLists: node.EnableIPLists,
+		APINodeAddrs:  node.DecodeAPINodeAddrs(),
+
+		DataMap: dataMap,
+	}
+
+	// 待更新服务ID
+	updatingServerListId, err := SharedUpdatingServerListDAO.FindLatestId(tx)
+	if err != nil {
+		return nil, err
+	}
+	config.UpdatingServerListId = updatingServerListId
+
+	// API节点IP
+	apiNodeIPs, err := SharedAPINodeDAO.FindAllEnabledAPIAccessIPs(tx, cacheMap)
+	if err != nil {
+		return nil, err
+	}
+	config.AllowedIPs = append(config.AllowedIPs, apiNodeIPs...)
+
+	// 当前的节点IP地址
+	nodeNodeIPs, err := SharedNodeIPAddressDAO.FindAllEnabledAddressStringsWithNode(tx, nodeId, nodeconfigs.NodeRoleNode)
+	if err != nil {
+		return nil, err
+	}
+	config.IPAddresses = nodeNodeIPs
+
+	// 所属集群
+	var primaryClusterId = int64(node.ClusterId)
+	var clusterIds = []int64{primaryClusterId}
+	clusterIds = append(clusterIds, node.DecodeSecondaryClusterIds()...)
 
 	// 获取所有的服务
 	servers, err := SharedServerDAO.FindAllEnabledServersWithNode(tx, int64(node.Id))
@@ -527,69 +1059,210 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64) (*nodeconfigs.N
 		return nil, err
 	}
 
+	// 获取集群上的其他服务
+	var serverIdMap = map[int64]zero.Zero{}
 	for _, server := range servers {
-		if len(server.Config) == 0 {
+		serverIdMap[int64(server.Id)] = zero.Zero{}
+	}
+	for _, clusterId := range clusterIds {
+		clusterServers, err := this.loadServersFromCluster(tx, clusterId, serverIdMap)
+		if err != nil {
+			return nil, err
+		}
+		servers = append(servers, clusterServers...)
+	}
+
+	for _, server := range servers {
+		serverConfig, err := SharedServerDAO.ComposeServerConfig(tx, server, false, dataMap, cacheMap, true, false)
+		if err != nil {
+			return nil, err
+		}
+		if serverConfig == nil {
+			continue
+		}
+		config.Servers = append(config.Servers, serverConfig)
+
+		if server.IsOn && server.SupportCNAME == 1 {
+			config.SupportCNAME = true
+		}
+	}
+
+	var clusterIndex = 0
+	config.WebPImagePolicies = map[int64]*nodeconfigs.WebPImagePolicy{}
+	config.UAMPolicies = map[int64]*nodeconfigs.UAMPolicy{}
+	config.HTTPCCPolicies = map[int64]*nodeconfigs.HTTPCCPolicy{}
+	config.HTTP3Policies = map[int64]*nodeconfigs.HTTP3Policy{}
+	config.HTTPPagesPolicies = map[int64]*nodeconfigs.HTTPPagesPolicy{}
+
+	var cachePolicyIds = []int64{}
+
+	var allowIPMaps = map[string]bool{}
+	for _, clusterId := range clusterIds {
+		nodeCluster, err := SharedNodeClusterDAO.FindClusterBasicInfo(tx, clusterId, cacheMap)
+		if err != nil {
+			return nil, err
+		}
+		if nodeCluster == nil || !nodeCluster.IsOn {
 			continue
 		}
 
-		serverConfig := &serverconfigs.ServerConfig{}
-		err = json.Unmarshal([]byte(server.Config), serverConfig)
+		// 所有节点IP地址
+		nodeIPAddresses, err := SharedNodeIPAddressDAO.FindAllAccessibleIPAddressesWithClusterId(tx, nodeconfigs.NodeRoleNode, clusterId, cacheMap)
 		if err != nil {
 			return nil, err
 		}
-		config.Servers = append(config.Servers, serverConfig)
-	}
+		for _, address := range nodeIPAddresses {
+			var ip = address.Ip
+			_, ok := allowIPMaps[ip]
+			if !ok {
+				allowIPMaps[ip] = true
+				config.AllowedIPs = append(config.AllowedIPs, ip)
+			}
+		}
 
-	// 全局设置
-	// TODO 根据用户的不同读取不同的全局设置
-	settingJSON, err := SharedSysSettingDAO.ReadSetting(tx, systemconfigs.SettingCodeServerGlobalConfig)
-	if err != nil {
-		return nil, err
-	}
-	if len(settingJSON) > 0 {
-		globalConfig := &serverconfigs.GlobalConfig{}
-		err = json.Unmarshal(settingJSON, globalConfig)
-		if err != nil {
-			return nil, err
+		// 防火墙
+		var httpFirewallPolicyId = int64(nodeCluster.HttpFirewallPolicyId)
+		if httpFirewallPolicyId > 0 {
+			firewallPolicy, err := SharedHTTPFirewallPolicyDAO.ComposeFirewallPolicy(tx, httpFirewallPolicyId, true, cacheMap)
+			if err != nil {
+				return nil, err
+			}
+			if firewallPolicy != nil {
+				config.HTTPFirewallPolicies = append(config.HTTPFirewallPolicies, firewallPolicy)
+			}
 		}
-		config.GlobalConfig = globalConfig
-	}
 
-	// WAF
-	clusterId := int64(node.ClusterId)
-	httpFirewallPolicyId, err := SharedNodeClusterDAO.FindClusterHTTPFirewallPolicyId(tx, clusterId)
-	if err != nil {
-		return nil, err
-	}
-	if httpFirewallPolicyId > 0 {
-		firewallPolicy, err := SharedHTTPFirewallPolicyDAO.ComposeFirewallPolicy(tx, httpFirewallPolicyId)
-		if err != nil {
-			return nil, err
+		// 缓存策略
+		var httpCachePolicyId = int64(nodeCluster.CachePolicyId)
+		if httpCachePolicyId > 0 {
+			if !lists.ContainsInt64(cachePolicyIds, httpCachePolicyId) {
+				cachePolicyIds = append(cachePolicyIds, httpCachePolicyId)
+				cachePolicy, err := SharedHTTPCachePolicyDAO.ComposeCachePolicy(tx, httpCachePolicyId, cacheMap)
+				if err != nil {
+					return nil, err
+				}
+				if cachePolicy != nil {
+					config.HTTPCachePolicies = append(config.HTTPCachePolicies, cachePolicy)
+				}
+			}
 		}
-		if firewallPolicy != nil {
-			config.HTTPFirewallPolicy = firewallPolicy
-		}
-	}
 
-	// 缓存策略
-	httpCachePolicyId, err := SharedNodeClusterDAO.FindClusterHTTPCachePolicyId(tx, clusterId)
-	if err != nil {
-		return nil, err
-	}
-	if httpCachePolicyId > 0 {
-		cachePolicy, err := SharedHTTPCachePolicyDAO.ComposeCachePolicy(tx, httpCachePolicyId)
-		if err != nil {
-			return nil, err
+		// 时区
+		if len(config.TimeZone) == 0 {
+			var timeZone = nodeCluster.TimeZone
+			if len(timeZone) > 0 {
+				config.TimeZone = timeZone
+			}
 		}
-		if cachePolicy != nil {
-			config.HTTPCachePolicy = cachePolicy
+
+		// 时钟
+		if config.Clock == nil {
+			config.Clock = nodeCluster.DecodeClock()
 		}
+
+		// 全局配置
+		if config.GlobalServerConfig == nil {
+			config.GlobalServerConfig = nodeCluster.DecodeGlobalServerConfig()
+		}
+
+		// 最大线程数、TCP连接数
+		if clusterIndex == 0 {
+			config.MaxThreads = int(nodeCluster.NodeMaxThreads)
+			config.DDoSProtection = nodeCluster.DecodeDDoSProtection()
+			config.AutoOpenPorts = nodeCluster.AutoOpenPorts == 1
+		}
+
+		// webp
+		if IsNotNull(nodeCluster.Webp) {
+			var webpPolicy = nodeconfigs.NewWebPImagePolicy()
+			err = json.Unmarshal(nodeCluster.Webp, webpPolicy)
+			if err != nil {
+				return nil, err
+			}
+			config.WebPImagePolicies[clusterId] = webpPolicy
+		}
+
+		// UAM
+		if IsNotNull(nodeCluster.Uam) {
+			var uamPolicy = nodeconfigs.NewUAMPolicy()
+			err = json.Unmarshal(nodeCluster.Uam, uamPolicy)
+			if err != nil {
+				return nil, err
+			}
+			config.UAMPolicies[clusterId] = uamPolicy
+		}
+
+		// HTTP CC Policy
+		if IsNotNull(nodeCluster.Cc) {
+			var ccPolicy = nodeconfigs.NewHTTPCCPolicy()
+			err = json.Unmarshal(nodeCluster.Cc, ccPolicy)
+			if err != nil {
+				return nil, err
+			}
+
+			// 集成默认设置
+			for i := 0; i < len(serverconfigs.DefaultHTTPCCThresholds); i++ {
+				if i < len(ccPolicy.Thresholds) {
+					ccPolicy.Thresholds[i].MergeIfEmpty(serverconfigs.DefaultHTTPCCThresholds[i])
+				}
+			}
+
+			config.HTTPCCPolicies[clusterId] = ccPolicy
+		}
+
+		// HTTP3 Policy
+		if IsNotNull(nodeCluster.Http3) {
+			var http3Policy = nodeconfigs.NewHTTP3Policy()
+			err = json.Unmarshal(nodeCluster.Http3, http3Policy)
+			if err != nil {
+				return nil, err
+			}
+			config.HTTP3Policies[clusterId] = http3Policy
+		}
+
+		// HTTP Pages Policy
+		if IsNotNull(nodeCluster.HttpPages) {
+			var httpPagesPolicy = nodeconfigs.NewHTTPPagesPolicy()
+			err = json.Unmarshal(nodeCluster.HttpPages, httpPagesPolicy)
+			if err != nil {
+				return nil, err
+			}
+			if httpPagesPolicy.IsOn {
+				var newPages = []*serverconfigs.HTTPPageConfig{}
+				for _, page := range httpPagesPolicy.Pages {
+					pageConfig, err := SharedHTTPPageDAO.ComposePageConfig(tx, page.Id, cacheMap)
+					if err != nil {
+						return nil, err
+					}
+					if pageConfig != nil && pageConfig.IsOn {
+						newPages = append(newPages, pageConfig)
+					}
+				}
+				httpPagesPolicy.Pages = newPages
+				if len(newPages) > 0 {
+					config.HTTPPagesPolicies[clusterId] = httpPagesPolicy
+				}
+			}
+		}
+
+		// 自动安装nftables
+		if clusterIndex == 0 {
+			config.AutoInstallNftables = nodeCluster.AutoInstallNftables
+			config.AutoSystemTuning = nodeCluster.AutoSystemTuning
+		}
+
+		// 安全设置
+		if clusterIndex == 0 {
+			config.NetworkSecurityPolicy = nodeCluster.DecodeNetworkSecurityPolicy()
+		}
+
+		clusterIndex++
 	}
 
 	// 缓存最大容量设置
 	if len(node.MaxCacheDiskCapacity) > 0 {
 		capacity := &shared.SizeCapacity{}
-		err = json.Unmarshal([]byte(node.MaxCacheDiskCapacity), capacity)
+		err = json.Unmarshal(node.MaxCacheDiskCapacity, capacity)
 		if err != nil {
 			return nil, err
 		}
@@ -600,7 +1273,7 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64) (*nodeconfigs.N
 
 	if len(node.MaxCacheMemoryCapacity) > 0 {
 		capacity := &shared.SizeCapacity{}
-		err = json.Unmarshal([]byte(node.MaxCacheMemoryCapacity), capacity)
+		err = json.Unmarshal(node.MaxCacheMemoryCapacity, capacity)
 		if err != nil {
 			return nil, err
 		}
@@ -609,15 +1282,18 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64) (*nodeconfigs.N
 		}
 	}
 
+	config.CacheDiskDir = node.CacheDiskDir
+	config.CacheDiskSubDirs = node.DecodeCacheDiskSubDirs()
+
 	// TOA
-	toaConfig, err := SharedNodeClusterDAO.FindClusterTOAConfig(tx, clusterId)
+	toaConfig, err := SharedNodeClusterDAO.FindClusterTOAConfig(tx, primaryClusterId, cacheMap)
 	if err != nil {
 		return nil, err
 	}
 	config.TOA = toaConfig
 
 	// 系统服务
-	services, err := SharedNodeClusterDAO.FindNodeClusterSystemServices(tx, clusterId)
+	services, err := SharedNodeClusterDAO.FindNodeClusterSystemServices(tx, primaryClusterId, cacheMap)
 	if err != nil {
 		return nil, err
 	}
@@ -625,8 +1301,18 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64) (*nodeconfigs.N
 		config.SystemServices = services
 	}
 
+	// DNS Resolver
+	if IsNotNull(node.DnsResolver) {
+		var dnsResolverConfig = nodeconfigs.DefaultDNSResolverConfig()
+		err = json.Unmarshal(node.DnsResolver, dnsResolverConfig)
+		if err != nil {
+			return nil, err
+		}
+		config.DNSResolver = dnsResolverConfig
+	}
+
 	// 防火墙动作
-	actions, err := SharedNodeClusterFirewallActionDAO.FindAllEnabledFirewallActions(tx, clusterId)
+	actions, err := SharedNodeClusterFirewallActionDAO.FindAllEnabledFirewallActions(tx, primaryClusterId, cacheMap)
 	if err != nil {
 		return nil, err
 	}
@@ -640,6 +1326,71 @@ func (this *NodeDAO) ComposeNodeConfig(tx *dbs.Tx, nodeId int64) (*nodeconfigs.N
 		}
 	}
 
+	// 集群指标
+	metricItemIds, err := SharedNodeClusterMetricItemDAO.FindAllClusterItemIds(tx, int64(node.ClusterId), cacheMap)
+	if err != nil {
+		return nil, err
+	}
+	var metricItems = []*serverconfigs.MetricItemConfig{}
+	for _, itemId := range metricItemIds {
+		itemConfig, err := SharedMetricItemDAO.ComposeItemConfig(tx, itemId)
+		if err != nil {
+			return nil, err
+		}
+		if itemConfig != nil {
+			metricItems = append(metricItems, itemConfig)
+		}
+	}
+
+	// 公用指标
+	publicMetricItems, err := SharedMetricItemDAO.FindAllPublicItems(tx, serverconfigs.MetricItemCategoryHTTP, cacheMap)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range publicMetricItems {
+		itemConfig := SharedMetricItemDAO.ComposeItemConfigWithItem(item)
+		if itemConfig != nil && !lists.ContainsInt64(metricItemIds, itemConfig.Id) {
+			metricItems = append(metricItems, itemConfig)
+		}
+	}
+
+	config.MetricItems = metricItems
+
+	// 产品
+	adminUIConfig, err := SharedSysSettingDAO.ReadAdminUIConfig(tx, cacheMap)
+	if err != nil {
+		return nil, err
+	}
+	if adminUIConfig != nil {
+		config.ProductConfig = &nodeconfigs.ProductConfig{
+			Name:    adminUIConfig.ProductName,
+			Version: adminUIConfig.Version,
+		}
+	}
+
+	// OCSP
+	ocspVersion, err := SharedSSLCertDAO.FindCertOCSPLatestVersion(tx)
+	if err != nil {
+		return nil, err
+	}
+	config.OCSPVersion = ocspVersion
+
+	// DDOS Protection
+	var ddosProtection = node.DecodeDDoSProtection()
+	if ddosProtection != nil {
+		if config.DDoSProtection == nil {
+			config.DDoSProtection = ddosProtection
+		} else {
+			config.DDoSProtection.Merge(ddosProtection)
+		}
+	}
+
+	// 初始化扩展配置
+	err = this.composeExtConfig(tx, config, clusterIds, cacheMap)
+	if err != nil {
+		return nil, err
+	}
+
 	return config, nil
 }
 
@@ -649,7 +1400,7 @@ func (this *NodeDAO) UpdateNodeConnectedAPINodes(tx *dbs.Tx, nodeId int64, apiNo
 		return errors.New("invalid nodeId")
 	}
 
-	op := NewNodeOperator()
+	var op = NewNodeOperator()
 	op.Id = nodeId
 
 	if len(apiNodeIds) > 0 {
@@ -667,36 +1418,39 @@ func (this *NodeDAO) UpdateNodeConnectedAPINodes(tx *dbs.Tx, nodeId int64, apiNo
 
 // FindEnabledNodeIdWithUniqueId 根据UniqueId获取ID
 func (this *NodeDAO) FindEnabledNodeIdWithUniqueId(tx *dbs.Tx, uniqueId string) (int64, error) {
-	return this.Query(tx).
-		State(NodeStateEnabled).
-		Attr("uniqueId", uniqueId).
-		ResultPk().
-		FindInt64Col(0)
-}
-
-// FindEnabledNodeIdWithUniqueIdCacheable 根据UniqueId获取ID，并可以使用缓存
-func (this *NodeDAO) FindEnabledNodeIdWithUniqueIdCacheable(tx *dbs.Tx, uniqueId string) (int64, error) {
-	SharedCacheLocker.RLock()
-	nodeId, ok := nodeIdCacheMap[uniqueId]
-	if ok {
-		SharedCacheLocker.RUnlock()
-		return nodeId, nil
+	var cacheKey = "nodeId@uniqueId@" + uniqueId
+	var item = ttlcache.SharedCache.Read(cacheKey)
+	if item != nil {
+		return types.Int64(item.Value), nil
 	}
-	SharedCacheLocker.RUnlock()
-	nodeId, err := this.Query(tx).
+
+	one, err := this.Query(tx).
 		State(NodeStateEnabled).
 		Attr("uniqueId", uniqueId).
-		ResultPk().
-		FindInt64Col(0)
+		Result("id", "clusterId").
+		Find()
+	if err != nil || one == nil {
+		return 0, err
+	}
+
+	// 检查集群
+	var node = one.(*Node)
+	var clusterId = int64(node.ClusterId)
+	if clusterId <= 0 {
+		return 0, nil
+	}
+
+	isOn, err := SharedNodeClusterDAO.CheckNodeClusterIsOn(tx, clusterId)
 	if err != nil {
 		return 0, err
 	}
-	if nodeId > 0 {
-		SharedCacheLocker.Lock()
-		nodeIdCacheMap[uniqueId] = nodeId
-		SharedCacheLocker.Unlock()
+	if !isOn {
+		return 0, nil
 	}
-	return nodeId, nil
+
+	ttlcache.SharedCache.Write(cacheKey, int64(node.Id), time.Now().Unix()+60)
+
+	return int64(node.Id), nil
 }
 
 // CountAllEnabledNodesWithGrantId 计算使用某个认证的节点数量
@@ -713,7 +1467,7 @@ func (this *NodeDAO) CountAllEnabledNodesWithGrantId(tx *dbs.Tx, grantId int64) 
 func (this *NodeDAO) FindAllEnabledNodesWithGrantId(tx *dbs.Tx, grantId int64) (result []*Node, err error) {
 	_, err = this.Query(tx).
 		State(NodeStateEnabled).
-		Where("id IN (SELECT nodeId FROM edgeNodeLogins WHERE type='ssh' AND JSON_CONTAINS(params, :grantParam))").
+		Where("id IN (SELECT nodeId FROM edgeNodeLogins WHERE type='ssh' AND JSON_CONTAINS(params, :grantParam) AND state=1)").
 		Param("grantParam", string(maps.Map{"grantId": grantId}.AsJSON())).
 		Where("clusterId IN (SELECT id FROM edgeNodeClusters WHERE state=1)").
 		Slice(&result).
@@ -747,6 +1501,7 @@ func (this *NodeDAO) FindAllNotInstalledNodesWithClusterId(tx *dbs.Tx, clusterId
 func (this *NodeDAO) CountAllLowerVersionNodesWithClusterId(tx *dbs.Tx, clusterId int64, os string, arch string, version string) (int64, error) {
 	return this.Query(tx).
 		State(NodeStateEnabled).
+		Attr("isOn", true).
 		Attr("clusterId", clusterId).
 		Where("status IS NOT NULL").
 		Where("JSON_EXTRACT(status, '$.os')=:os").
@@ -780,6 +1535,7 @@ func (this *NodeDAO) FindAllLowerVersionNodesWithClusterId(tx *dbs.Tx, clusterId
 func (this *NodeDAO) CountAllLowerVersionNodes(tx *dbs.Tx, version string) (int64, error) {
 	return this.Query(tx).
 		State(NodeStateEnabled).
+		Attr("isOn", true).
 		Where("clusterId IN (SELECT id FROM "+SharedNodeClusterDAO.Table+" WHERE state=1)").
 		Where("status IS NOT NULL").
 		Where("(JSON_EXTRACT(status, '$.buildVersionCode') IS NULL OR JSON_EXTRACT(status, '$.buildVersionCode')<:version)").
@@ -792,6 +1548,7 @@ func (this *NodeDAO) CountAllEnabledNodesWithGroupId(tx *dbs.Tx, groupId int64) 
 	return this.Query(tx).
 		State(NodeStateEnabled).
 		Attr("groupId", groupId).
+		Where("clusterId IN (SELECT id FROM " + SharedNodeClusterDAO.Table + " WHERE state=1)").
 		Count()
 }
 
@@ -804,14 +1561,71 @@ func (this *NodeDAO) CountAllEnabledNodesWithRegionId(tx *dbs.Tx, regionId int64
 		Count()
 }
 
-// FindAllEnabledNodesDNSWithClusterId 获取一个集群的节点DNS信息
-func (this *NodeDAO) FindAllEnabledNodesDNSWithClusterId(tx *dbs.Tx, clusterId int64) (result []*Node, err error) {
-	_, err = this.Query(tx).
+// CountAllNodeRegionInfo 查找所有节点区域信息数量
+func (this *NodeDAO) CountAllNodeRegionInfo(tx *dbs.Tx, regionId int64) (int64, error) {
+	var query = this.Query(tx).
 		State(NodeStateEnabled).
-		Attr("clusterId", clusterId).
+		Where("clusterId IN (SELECT id FROM " + SharedNodeClusterDAO.Table + " WHERE state=1)")
+	if regionId > 0 {
+		query.Attr("regionId", regionId)
+	}
+	return query.Count()
+}
+
+// ListNodeRegionInfo 列出节点区域信息
+func (this *NodeDAO) ListNodeRegionInfo(tx *dbs.Tx, regionId int64, offset int64, size int64) (result []*Node, err error) {
+	var query = this.Query(tx).
+		Result("id", "name", "clusterId", "regionId").
+		State(NodeStateEnabled).
+		Where("clusterId IN (SELECT id FROM " + SharedNodeClusterDAO.Table + " WHERE state=1)").
+		Asc("IF(regionId=0, 0, 1)"). // 按照 regionId 排序是为了让没有设置区域的节点排在最上面
+		DescPk().
+		Offset(offset).
+		Limit(size).
+		Slice(&result)
+	if regionId > 0 {
+		query.Attr("regionId", regionId)
+	}
+	_, err = query.FindAll()
+	return
+}
+
+// UpdateNodeRegionId 修改节点所在区域
+func (this *NodeDAO) UpdateNodeRegionId(tx *dbs.Tx, nodeId int64, regionId int64) error {
+	// 这里允许 regionId 为 0
+	err := this.Query(tx).
+		Pk(nodeId).
+		Set("regionId", regionId).
+		UpdateQuickly()
+	if err != nil {
+		return err
+	}
+
+	return this.NotifyUpdate(tx, nodeId)
+}
+
+// FindAllEnabledNodesDNSWithClusterId 获取一个集群的节点DNS信息
+func (this *NodeDAO) FindAllEnabledNodesDNSWithClusterId(tx *dbs.Tx, clusterId int64, includeSecondaryNodes bool, includingLnNodes bool, isInstalled bool) (result []*Node, err error) {
+	if clusterId <= 0 {
+		return nil, nil
+	}
+	var query = this.Query(tx)
+	if includeSecondaryNodes {
+		query.Where("(clusterId=:primaryClusterId OR JSON_CONTAINS(secondaryClusterIds, :primaryClusterIdString))").
+			Param("primaryClusterId", clusterId).
+			Param("primaryClusterIdString", types.String(clusterId))
+	} else {
+		query.Attr("clusterId", clusterId)
+	}
+	if !includingLnNodes {
+		query.Lte("level", 1)
+	}
+	_, err = query.
+		State(NodeStateEnabled).
 		Attr("isOn", true).
 		Attr("isUp", true).
-		Result("id", "name", "dnsRoutes", "isOn").
+		Attr("isInstalled", isInstalled).
+		Result("id", "name", "dnsRoutes", "isOn", "offlineDay", "actionStatus", "isBackupForCluster", "isBackupForGroup", "backupIPs", "clusterId", "groupId").
 		DescPk().
 		Slice(&result).
 		FindAll()
@@ -836,9 +1650,9 @@ func (this *NodeDAO) FindEnabledNodeDNS(tx *dbs.Tx, nodeId int64) (*Node, error)
 	one, err := this.Query(tx).
 		State(NodeStateEnabled).
 		Pk(nodeId).
-		Result("id", "name", "dnsRoutes", "clusterId", "isOn").
+		Result("id", "name", "dnsRoutes", "clusterId", "isOn", "offlineDay", "isBackupForCluster", "isBackupForGroup", "actionStatus").
 		Find()
-	if err != nil || one == nil {
+	if one == nil {
 		return nil, err
 	}
 	return one.(*Node), nil
@@ -868,7 +1682,7 @@ func (this *NodeDAO) UpdateNodeDNS(tx *dbs.Tx, nodeId int64, routes map[int64][]
 	if err != nil {
 		return err
 	}
-	op := NewNodeOperator()
+	var op = NewNodeOperator()
 	op.Id = nodeId
 	op.DnsRoutes = routesJSON
 	err = this.Save(tx, op)
@@ -889,6 +1703,95 @@ func (this *NodeDAO) UpdateNodeDNS(tx *dbs.Tx, nodeId int64, routes map[int64][]
 	return nil
 }
 
+// FindNodeDNSResolver 查找域名DNS Resolver
+func (this *NodeDAO) FindNodeDNSResolver(tx *dbs.Tx, nodeId int64) (*nodeconfigs.DNSResolverConfig, error) {
+	configJSON, err := this.Query(tx).
+		Pk(nodeId).
+		Result("dnsResolver").
+		FindJSONCol()
+	if err != nil {
+		return nil, err
+	}
+	if IsNull(configJSON) {
+		return nodeconfigs.DefaultDNSResolverConfig(), nil
+	}
+
+	var config = nodeconfigs.DefaultDNSResolverConfig()
+	err = json.Unmarshal(configJSON, config)
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+// UpdateNodeDNSResolver 修改域名DNS Resolver
+func (this *NodeDAO) UpdateNodeDNSResolver(tx *dbs.Tx, nodeId int64, dnsResolverConfig *nodeconfigs.DNSResolverConfig) error {
+	if nodeId <= 0 {
+		return ErrNotFound
+	}
+
+	configJSON, err := json.Marshal(dnsResolverConfig)
+	if err != nil {
+		return err
+	}
+
+	var op = NewNodeOperator()
+	op.Id = nodeId
+	op.DnsResolver = configJSON
+	err = this.Save(tx, op)
+	if err != nil {
+		return err
+	}
+
+	return this.NotifyUpdate(tx, nodeId)
+}
+
+// UpdateNodeSystem 设置系统信息
+func (this *NodeDAO) UpdateNodeSystem(tx *dbs.Tx, nodeId int64, maxCPU int32) error {
+	if nodeId <= 0 {
+		return errors.New("invalid nodeId")
+	}
+	var op = NewNodeOperator()
+	op.Id = nodeId
+	op.MaxCPU = maxCPU
+	err := this.Save(tx, op)
+	if err != nil {
+		return err
+	}
+	return this.NotifyUpdate(tx, nodeId)
+}
+
+// UpdateNodeCache 设置缓存相关
+func (this *NodeDAO) UpdateNodeCache(tx *dbs.Tx, nodeId int64, maxCacheDiskCapacityJSON []byte, maxCacheMemoryCapacityJSON []byte, cacheDiskDir string, cacheDiskSubDirs []*serverconfigs.CacheDir) error {
+	if nodeId <= 0 {
+		return errors.New("invalid nodeId")
+	}
+	var op = NewNodeOperator()
+	op.Id = nodeId
+	if len(maxCacheDiskCapacityJSON) > 0 {
+		op.MaxCacheDiskCapacity = maxCacheDiskCapacityJSON
+	}
+	if len(maxCacheMemoryCapacityJSON) > 0 {
+		op.MaxCacheMemoryCapacity = maxCacheMemoryCapacityJSON
+	}
+	op.CacheDiskDir = cacheDiskDir
+
+	if cacheDiskSubDirs == nil {
+		cacheDiskSubDirs = []*serverconfigs.CacheDir{}
+	}
+	cacheDiskSubDirsJSON, err := json.Marshal(cacheDiskSubDirs)
+	if err != nil {
+		return err
+	}
+	op.CacheDiskSubDirs = cacheDiskSubDirsJSON
+
+	err = this.Save(tx, op)
+	if err != nil {
+		return err
+	}
+	return this.NotifyUpdate(tx, nodeId)
+}
+
 // UpdateNodeUpCount 计算节点上线|下线状态
 func (this *NodeDAO) UpdateNodeUpCount(tx *dbs.Tx, nodeId int64, isUp bool, maxUp int, maxDown int) (changed bool, err error) {
 	if nodeId <= 0 {
@@ -904,7 +1807,7 @@ func (this *NodeDAO) UpdateNodeUpCount(tx *dbs.Tx, nodeId int64, isUp bool, maxU
 	if one == nil {
 		return false, nil
 	}
-	oldIsUp := one.(*Node).IsUp == 1
+	oldIsUp := one.(*Node).IsUp
 
 	// 如果新老状态一致，则不做任何事情
 	if oldIsUp == isUp {
@@ -914,7 +1817,7 @@ func (this *NodeDAO) UpdateNodeUpCount(tx *dbs.Tx, nodeId int64, isUp bool, maxU
 	countUp := int(one.(*Node).CountUp)
 	countDown := int(one.(*Node).CountDown)
 
-	op := NewNodeOperator()
+	var op = NewNodeOperator()
 	op.Id = nodeId
 
 	if isUp {
@@ -942,9 +1845,11 @@ func (this *NodeDAO) UpdateNodeUpCount(tx *dbs.Tx, nodeId int64, isUp bool, maxU
 		return false, err
 	}
 
-	err = this.NotifyDNSUpdate(tx, nodeId)
-	if err != nil {
-		return false, err
+	if changed {
+		err = this.NotifyDNSUpdate(tx, nodeId)
+		if err != nil {
+			return true, err
+		}
 	}
 
 	return
@@ -955,15 +1860,19 @@ func (this *NodeDAO) UpdateNodeUp(tx *dbs.Tx, nodeId int64, isUp bool) error {
 	if nodeId <= 0 {
 		return errors.New("invalid nodeId")
 	}
-	op := NewNodeOperator()
+
+	var op = NewNodeOperator()
 	op.Id = nodeId
 	op.IsUp = isUp
-	op.CountDown = 0
+	op.CountUp = 0
 	op.CountDown = 0
 	err := this.Save(tx, op)
 	if err != nil {
 		return err
 	}
+
+	// TODO 只有前后状态不一致的时候才需要更新DNS
+
 	return this.NotifyDNSUpdate(tx, nodeId)
 }
 
@@ -975,8 +1884,29 @@ func (this *NodeDAO) UpdateNodeActive(tx *dbs.Tx, nodeId int64, isActive bool) e
 	_, err := this.Query(tx).
 		Pk(nodeId).
 		Set("isActive", isActive).
+		Set("inactiveNotifiedAt", 0).
 		Update()
 	return err
+}
+
+// UpdateNodeInactiveNotifiedAt 修改节点的离线通知时间
+func (this *NodeDAO) UpdateNodeInactiveNotifiedAt(tx *dbs.Tx, nodeId int64, inactiveAt int64) error {
+	if nodeId <= 0 {
+		return errors.New("invalid nodeId")
+	}
+	_, err := this.Query(tx).
+		Pk(nodeId).
+		Set("inactiveNotifiedAt", inactiveAt).
+		Update()
+	return err
+}
+
+// FindNodeInactiveNotifiedAt 读取上次的节点离线通知时间
+func (this *NodeDAO) FindNodeInactiveNotifiedAt(tx *dbs.Tx, nodeId int64) (int64, error) {
+	return this.Query(tx).
+		Pk(nodeId).
+		Result("inactiveNotifiedAt").
+		FindInt64Col(0)
 }
 
 // FindNodeActive 检查节点活跃状态
@@ -1035,39 +1965,334 @@ func (this *NodeDAO) FindEnabledNodesWithIds(tx *dbs.Tx, nodeIds []int64) (resul
 	return
 }
 
-// NotifyUpdate 通知更新
-func (this *NodeDAO) NotifyUpdate(tx *dbs.Tx, nodeId int64) error {
+// DeleteNodeFromCluster 从集群中删除节点
+func (this *NodeDAO) DeleteNodeFromCluster(tx *dbs.Tx, nodeId int64, clusterId int64) error {
+	one, err := this.Query(tx).
+		Pk(nodeId).
+		Result("clusterId", "secondaryClusterIds").
+		Find()
+	if err != nil {
+		return err
+	}
+	if one == nil {
+		return nil
+	}
+
+	// 提前通知DNS更新，因为后面集群会有变化
+	err = this.NotifyDNSUpdate(tx, nodeId)
+	if err != nil {
+		return err
+	}
+
+	var node = one.(*Node)
+
+	var secondaryClusterIds = []int64{}
+	for _, secondaryClusterId := range node.DecodeSecondaryClusterIds() {
+		if secondaryClusterId == clusterId {
+			continue
+		}
+		secondaryClusterIds = append(secondaryClusterIds, secondaryClusterId)
+	}
+
+	var newClusterId = int64(node.ClusterId)
+
+	if newClusterId == clusterId {
+		newClusterId = 0
+
+		// 选择一个从集群作为主集群
+		if len(secondaryClusterIds) > 0 {
+			newClusterId = secondaryClusterIds[0]
+			secondaryClusterIds = secondaryClusterIds[1:]
+		}
+	}
+
+	secondaryClusterIdsJSON, err := json.Marshal(secondaryClusterIds)
+	if err != nil {
+		return err
+	}
+	var op = NewNodeOperator()
+	op.Id = nodeId
+	op.ClusterId = newClusterId
+	op.SecondaryClusterIds = secondaryClusterIdsJSON
+
+	if newClusterId == 0 {
+		op.State = NodeStateDisabled
+	}
+
+	err = this.Save(tx, op)
+	if err != nil {
+		return err
+	}
+
+	// 是否为删除
+	if newClusterId == 0 {
+		// 删除运行日志
+		return SharedNodeLogDAO.DeleteNodeLogs(tx, nodeconfigs.NodeRoleNode, nodeId)
+	}
+
+	return nil
+}
+
+// TransferPrimaryClusterNodes 自动转移集群下的节点
+func (this *NodeDAO) TransferPrimaryClusterNodes(tx *dbs.Tx, primaryClusterId int64) error {
+	if primaryClusterId <= 0 {
+		return nil
+	}
+	ones, err := this.Query(tx).
+		Attr("clusterId", primaryClusterId).
+		Result("id", "secondaryClusterIds").
+		State(NodeStateEnabled).
+		FindAll()
+	if err != nil {
+		return err
+	}
+	for _, one := range ones {
+		var node = one.(*Node)
+		clusterIds := node.DecodeSecondaryClusterIds()
+		if len(clusterIds) == 0 {
+			continue
+		}
+		var clusterId = clusterIds[0]
+		var secondaryClusterIds = clusterIds[1:]
+		secondaryClusterIdsJSON, err := json.Marshal(secondaryClusterIds)
+		if err != nil {
+			return err
+		}
+		err = this.Query(tx).
+			Pk(node.Id).
+			Set("clusterId", clusterId).
+			Set("secondaryClusterIds", secondaryClusterIdsJSON).
+			UpdateQuickly()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// FindParentNodeConfigs 查找父级节点配置
+func (this *NodeDAO) FindParentNodeConfigs(tx *dbs.Tx, nodeId int64, groupId int64, clusterIds []int64, level int) (result map[int64][]*nodeconfigs.ParentNodeConfig, err error) {
+	result = map[int64][]*nodeconfigs.ParentNodeConfig{} // clusterId => []*ParentNodeConfig
+
+	// 当前分组的L2
+	var parentNodes []*Node
+	if groupId > 0 {
+		parentNodes, err = this.FindEnabledNodesWithGroupIdAndLevel(tx, groupId, level+1)
+		if err != nil {
+			return nil, err
+		}
+	} else if nodeId > 0 {
+		// 当前节点所属分组
+		groupId, err = this.Query(tx).Result("groupId").FindInt64Col(0)
+		if err != nil {
+			return nil, err
+		}
+
+		if groupId > 0 {
+			parentNodes, err = this.FindEnabledNodesWithGroupIdAndLevel(tx, groupId, level+1)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// 当前集群的L2
+	if len(parentNodes) == 0 {
+		for _, clusterId := range clusterIds {
+			clusterParentNodes, err := this.FindEnabledNodesWithClusterIdAndLevel(tx, clusterId, level+1)
+			if err != nil {
+				return nil, err
+			}
+			if len(clusterParentNodes) > 0 {
+				parentNodes = append(parentNodes, clusterParentNodes...)
+			}
+		}
+	}
+
+	if len(parentNodes) > 0 {
+		for _, node := range parentNodes {
+			// 是否有Ln地址
+			var addrStrings = node.DecodeLnAddrs()
+			if len(addrStrings) == 0 {
+				// 如果没有就取节点的可访问地址
+				addrs, err := SharedNodeIPAddressDAO.FindNodeAccessAndUpIPAddresses(tx, int64(node.Id), nodeconfigs.NodeRoleNode)
+				if err != nil {
+					return nil, err
+				}
+				for _, addr := range addrs {
+					if addr.IsOn {
+						addrStrings = append(addrStrings, addr.DNSIP())
+					}
+				}
+			}
+
+			// 没有地址就跳过
+			if len(addrStrings) == 0 {
+				continue
+			}
+
+			var secretHash = fmt.Sprintf("%x", sha256.Sum256([]byte(node.UniqueId+"@"+node.Secret)))
+
+			for _, clusterId := range node.AllClusterIds() {
+				var parentNodeConfigs = result[clusterId]
+				parentNodeConfigs = append(parentNodeConfigs, &nodeconfigs.ParentNodeConfig{
+					Id:         int64(node.Id),
+					Addrs:      addrStrings,
+					SecretHash: secretHash,
+				})
+
+				// 排序
+				sort.Slice(parentNodeConfigs, func(i, j int) bool {
+					return parentNodeConfigs[i].Id < parentNodeConfigs[j].Id
+				})
+
+				result[clusterId] = parentNodeConfigs
+			}
+		}
+	}
+
+	return
+}
+
+// FindNodeDDoSProtection 获取节点的DDOS设置
+func (this *NodeDAO) FindNodeDDoSProtection(tx *dbs.Tx, nodeId int64) (*ddosconfigs.ProtectionConfig, error) {
+	one, err := this.Query(tx).
+		Result("ddosProtection").
+		Pk(nodeId).
+		Find()
+	if one == nil || err != nil {
+		return nil, err
+	}
+
+	return one.(*Node).DecodeDDoSProtection(), nil
+}
+
+// UpdateNodeDDoSProtection 设置集群的DDoS设置
+func (this *NodeDAO) UpdateNodeDDoSProtection(tx *dbs.Tx, nodeId int64, ddosProtection *ddosconfigs.ProtectionConfig) error {
+	if nodeId <= 0 {
+		return ErrNotFound
+	}
+
+	var op = NewNodeOperator()
+	op.Id = nodeId
+
+	if ddosProtection == nil {
+		op.DdosProtection = "{}"
+	} else {
+		ddosProtectionJSON, err := json.Marshal(ddosProtection)
+		if err != nil {
+			return err
+		}
+		op.DdosProtection = ddosProtectionJSON
+	}
+
+	err := this.Save(tx, op)
+	if err != nil {
+		return err
+	}
+
 	clusterId, err := this.FindNodeClusterId(tx, nodeId)
 	if err != nil {
 		return err
 	}
 	if clusterId > 0 {
-		return SharedNodeTaskDAO.CreateNodeTask(tx, clusterId, nodeId, NodeTaskTypeConfigChanged)
+		return SharedNodeTaskDAO.CreateNodeTask(tx, nodeconfigs.NodeRoleNode, clusterId, nodeId, 0, 0, NodeTaskTypeDDosProtectionChanged)
 	}
 	return nil
 }
 
-// NotifyDNSUpdate 通知DNS更新
-func (this *NodeDAO) NotifyDNSUpdate(tx *dbs.Tx, nodeId int64) error {
-	clusterId, err := this.Query(tx).
+// FindNodeAPIConfig 查找API相关配置信息
+func (this *NodeDAO) FindNodeAPIConfig(tx *dbs.Tx, nodeId int64) (*Node, error) {
+	if nodeId <= 0 {
+		return nil, nil
+	}
+
+	one, err := this.Query(tx).
 		Pk(nodeId).
-		Result("clusterId").
-		FindInt64Col(0) // 这里不需要加服务状态条件，因为我们即使删除也要删除对应的服务的DNS解析
+		Result("apiNodeAddrs").
+		Find()
+	if err != nil || one == nil {
+		return nil, err
+	}
+	return one.(*Node), nil
+}
+
+// UpdateNodeAPIConfig 修改API相关配置信息
+func (this *NodeDAO) UpdateNodeAPIConfig(tx *dbs.Tx, nodeId int64, apiNodeAddrs []*serverconfigs.NetworkAddressConfig) error {
+	if nodeId <= 0 {
+		return errors.New("invalid nodeId")
+	}
+
+	if apiNodeAddrs == nil {
+		apiNodeAddrs = []*serverconfigs.NetworkAddressConfig{}
+	}
+	apiNodeAddrsJSON, err := json.Marshal(apiNodeAddrs)
 	if err != nil {
 		return err
 	}
-	if clusterId <= 0 {
-		return nil
-	}
-	dnsInfo, err := SharedNodeClusterDAO.FindClusterDNSInfo(tx, clusterId)
+	var op = NewNodeOperator()
+	op.Id = nodeId
+	op.ApiNodeAddrs = apiNodeAddrsJSON
+	err = this.Save(tx, op)
 	if err != nil {
 		return err
 	}
-	if dnsInfo == nil {
-		return nil
+
+	return this.NotifyUpdate(tx, nodeId)
+}
+
+// NotifyUpdate 通知节点相关更新
+func (this *NodeDAO) NotifyUpdate(tx *dbs.Tx, nodeId int64) error {
+	// 这里只需要通知单个集群即可，因为节点是公用的，更新一个就相当于更新了所有
+	clusterId, err := this.FindNodeClusterId(tx, nodeId)
+	if err != nil {
+		return err
 	}
-	if len(dnsInfo.DnsName) == 0 || dnsInfo.DnsDomainId <= 0 {
-		return nil
+	err = SharedNodeTaskDAO.CreateNodeTask(tx, nodeconfigs.NodeRoleNode, clusterId, nodeId, 0, 0, NodeTaskTypeConfigChanged)
+	if err != nil {
+		return err
 	}
-	return dns.SharedDNSTaskDAO.CreateNodeTask(tx, nodeId, dns.DNSTaskTypeNodeChange)
+
+	return nil
+}
+
+// NotifyLevelUpdate 通知节点级别更新
+func (this *NodeDAO) NotifyLevelUpdate(tx *dbs.Tx, nodeId int64) error {
+	// 这里只需要通知单个集群即可，因为节点是公用的，更新一个就相当于更新了所有
+	clusterIds, err := this.FindEnabledAndOnNodeClusterIds(tx, nodeId)
+	if err != nil {
+		return err
+	}
+	for _, clusterId := range clusterIds {
+		err = SharedNodeTaskDAO.CreateClusterTask(tx, nodeconfigs.NodeRoleNode, clusterId, 0, 0, NodeTaskTypeNodeLevelChanged)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// NotifyDNSUpdate 通知节点相关DNS更新
+func (this *NodeDAO) NotifyDNSUpdate(tx *dbs.Tx, nodeId int64) error {
+	clusterIds, err := this.FindEnabledAndOnNodeClusterIds(tx, nodeId)
+	if err != nil {
+		return err
+	}
+	for _, clusterId := range clusterIds {
+		dnsInfo, err := SharedNodeClusterDAO.FindClusterDNSInfo(tx, clusterId, nil)
+		if err != nil {
+			return err
+		}
+		if dnsInfo == nil {
+			continue
+		}
+		if len(dnsInfo.DnsName) == 0 || dnsInfo.DnsDomainId <= 0 {
+			continue
+		}
+		err = dns.SharedDNSTaskDAO.CreateNodeTask(tx, clusterId, nodeId, dns.DNSTaskTypeNodeChange)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

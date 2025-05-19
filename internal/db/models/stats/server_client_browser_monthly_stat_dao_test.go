@@ -11,7 +11,16 @@ func TestServerClientBrowserMonthlyStatDAO_IncreaseMonthlyCount(t *testing.T) {
 	dbs.NotifyReady()
 
 	var tx *dbs.Tx
-	err := SharedServerClientBrowserMonthlyStatDAO.IncreaseMonthlyCount(tx, 1, 1, "202101", 1)
+	err := SharedServerClientBrowserMonthlyStatDAO.IncreaseMonthlyCount(tx, 1, 1, "1.0", "202101", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("ok")
+}
+
+func TestServerClientBrowserMonthlyStatDAO_Clean(t *testing.T) {
+	var dao = NewServerClientBrowserMonthlyStatDAO()
+	err := dao.Clean(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

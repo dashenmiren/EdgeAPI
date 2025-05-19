@@ -10,6 +10,12 @@ type ProviderInterface interface {
 	// Auth 认证
 	Auth(params maps.Map) error
 
+	// MaskParams 对参数进行掩码
+	MaskParams(params maps.Map)
+
+	// GetDomains 获取所有域名列表
+	GetDomains() (domains []string, err error)
+
 	// GetRecords 获取域名解析记录列表
 	GetRecords(domain string) (records []*dnstypes.Record, err error)
 
@@ -18,6 +24,9 @@ type ProviderInterface interface {
 
 	// QueryRecord 查询单个记录
 	QueryRecord(domain string, name string, recordType dnstypes.RecordType) (*dnstypes.Record, error)
+
+	// QueryRecords 查询多个记录
+	QueryRecords(domain string, name string, recordType dnstypes.RecordType) ([]*dnstypes.Record, error)
 
 	// AddRecord 设置记录
 	AddRecord(domain string, newRecord *dnstypes.Record) error

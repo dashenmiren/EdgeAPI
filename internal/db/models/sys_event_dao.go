@@ -35,7 +35,7 @@ func (this *SysEventDAO) CreateEvent(tx *dbs.Tx, event EventInterface) error {
 		return errors.New("event should not be nil")
 	}
 
-	op := NewSysEventOperator()
+	var op = NewSysEventOperator()
 	op.Type = event.Type()
 
 	eventJSON, err := json.Marshal(event)
@@ -51,7 +51,7 @@ func (this *SysEventDAO) CreateEvent(tx *dbs.Tx, event EventInterface) error {
 // 查找事件
 func (this *SysEventDAO) FindEvents(tx *dbs.Tx, size int64) (result []*SysEvent, err error) {
 	_, err = this.Query(tx).
-		Asc().
+		AscPk().
 		Limit(size).
 		Slice(&result).
 		FindAll()

@@ -2,9 +2,12 @@ package services
 
 import (
 	"context"
+
 	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/iwind/TeaGo/types"
 )
 
 type NodeIPAddressService struct {
@@ -14,32 +17,60 @@ type NodeIPAddressService struct {
 // CreateNodeIPAddress 创建IP地址
 func (this *NodeIPAddressService) CreateNodeIPAddress(ctx context.Context, req *pb.CreateNodeIPAddressRequest) (*pb.CreateNodeIPAddressResponse, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	adminId, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	addressId, err := models.SharedNodeIPAddressDAO.CreateAddress(tx, req.NodeId, req.Role, req.Name, req.Ip, req.CanAccess)
+	addressId, err := models.SharedNodeIPAddressDAO.CreateAddress(tx, adminId, req.NodeId, req.Role, req.Name, req.Ip, req.CanAccess, req.IsUp, 0, req.NodeClusterIds)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.CreateNodeIPAddressResponse{AddressId: addressId}, nil
+	return &pb.CreateNodeIPAddressResponse{NodeIPAddressId: addressId}, nil
+}
+
+// CreateNodeIPAddresses 批量创建IP地址
+func (this *NodeIPAddressService) CreateNodeIPAddresses(ctx context.Context, req *pb.CreateNodeIPAddressesRequest) (*pb.CreateNodeIPAddressesResponse, error) {
+	// 校验请求
+	adminId, err := this.ValidateAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var tx = this.NullTx()
+
+	// 创建分组
+	groupId, err := models.SharedNodeIPAddressGroupDAO.CreateGroup(tx, req.GroupValue, req.GroupValue)
+	if err != nil {
+		return nil, err
+	}
+
+	var result = []int64{}
+	for _, ip := range req.IpList {
+		addressId, err := models.SharedNodeIPAddressDAO.CreateAddress(tx, adminId, req.NodeId, req.Role, req.Name, ip, req.CanAccess, req.IsUp, groupId, req.NodeClusterIds)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, addressId)
+	}
+
+	return &pb.CreateNodeIPAddressesResponse{NodeIPAddressIds: result}, nil
 }
 
 // UpdateNodeIPAddress 修改IP地址
 func (this *NodeIPAddressService) UpdateNodeIPAddress(ctx context.Context, req *pb.UpdateNodeIPAddressRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	adminId, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	err = models.SharedNodeIPAddressDAO.UpdateAddress(tx, req.AddressId, req.Name, req.Ip, req.CanAccess)
+	err = models.SharedNodeIPAddressDAO.UpdateAddress(tx, adminId, req.NodeIPAddressId, req.Name, req.Ip, req.CanAccess, req.IsOn, req.IsUp, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
@@ -50,14 +81,14 @@ func (this *NodeIPAddressService) UpdateNodeIPAddress(ctx context.Context, req *
 // UpdateNodeIPAddressNodeId 修改IP地址所属节点
 func (this *NodeIPAddressService) UpdateNodeIPAddressNodeId(ctx context.Context, req *pb.UpdateNodeIPAddressNodeIdRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	err = models.SharedNodeIPAddressDAO.UpdateAddressNodeId(tx, req.AddressId, req.NodeId)
+	err = models.SharedNodeIPAddressDAO.UpdateAddressNodeId(tx, req.NodeIPAddressId, req.NodeId)
 	if err != nil {
 		return nil, err
 	}
@@ -68,14 +99,14 @@ func (this *NodeIPAddressService) UpdateNodeIPAddressNodeId(ctx context.Context,
 // DisableNodeIPAddress 禁用单个IP地址
 func (this *NodeIPAddressService) DisableNodeIPAddress(ctx context.Context, req *pb.DisableNodeIPAddressRequest) (*pb.DisableNodeIPAddressResponse, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	err = models.SharedNodeIPAddressDAO.DisableAddress(tx, req.AddressId)
+	err = models.SharedNodeIPAddressDAO.DisableAddress(tx, req.NodeIPAddressId)
 	if err != nil {
 		return nil, err
 	}
@@ -83,84 +114,257 @@ func (this *NodeIPAddressService) DisableNodeIPAddress(ctx context.Context, req 
 	return &pb.DisableNodeIPAddressResponse{}, nil
 }
 
-// DisableAllIPAddressesWithNodeId 禁用某个节点的IP地址
-func (this *NodeIPAddressService) DisableAllIPAddressesWithNodeId(ctx context.Context, req *pb.DisableAllIPAddressesWithNodeIdRequest) (*pb.DisableAllIPAddressesWithNodeIdResponse, error) {
+// DisableAllNodeIPAddressesWithNodeId 禁用某个节点的IP地址
+func (this *NodeIPAddressService) DisableAllNodeIPAddressesWithNodeId(ctx context.Context, req *pb.DisableAllNodeIPAddressesWithNodeIdRequest) (*pb.DisableAllNodeIPAddressesWithNodeIdResponse, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	err = models.SharedNodeIPAddressDAO.DisableAllAddressesWithNodeId(tx, req.NodeId, req.Role)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.DisableAllIPAddressesWithNodeIdResponse{}, nil
+	return &pb.DisableAllNodeIPAddressesWithNodeIdResponse{}, nil
 }
 
 // FindEnabledNodeIPAddress 查找单个IP地址
 func (this *NodeIPAddressService) FindEnabledNodeIPAddress(ctx context.Context, req *pb.FindEnabledNodeIPAddressRequest) (*pb.FindEnabledNodeIPAddressResponse, error) {
 	// 校验请求
-	_, err := this.ValidateAdmin(ctx, 0)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
-	address, err := models.SharedNodeIPAddressDAO.FindEnabledAddress(tx, req.AddressId)
+	address, err := models.SharedNodeIPAddressDAO.FindEnabledAddress(tx, req.NodeIPAddressId)
 	if err != nil {
 		return nil, err
 	}
+	if address == nil {
+		return &pb.FindEnabledNodeIPAddressResponse{
+			NodeIPAddress: nil,
+		}, nil
+	}
 
-	var result *pb.NodeIPAddress = nil
-	if address != nil {
-		result = &pb.NodeIPAddress{
-			Id:          int64(address.Id),
-			NodeId:      int64(address.NodeId),
-			Name:        address.Name,
-			Ip:          address.Ip,
-			Description: address.Description,
-			State:       int64(address.State),
-			Order:       int64(address.Order),
-			CanAccess:   address.CanAccess == 1,
+	// CDN集群
+	var pbNodeClusters = []*pb.NodeCluster{}
+	if len(address.ClusterIds) > 0 {
+		if address.Role == nodeconfigs.NodeRoleNode { // 边缘节点
+			var clusterIds = address.DecodeClusterIds()
+			for _, clusterId := range clusterIds {
+				cluster, err := models.SharedNodeClusterDAO.FindClusterBasicInfo(tx, clusterId, nil)
+				if err != nil {
+					return nil, err
+				}
+				if cluster != nil {
+					pbNodeClusters = append(pbNodeClusters, &pb.NodeCluster{
+						Id:   int64(cluster.Id),
+						Name: cluster.Name,
+					})
+				}
+			}
 		}
 	}
 
-	return &pb.FindEnabledNodeIPAddressResponse{IpAddress: result}, nil
+	return &pb.FindEnabledNodeIPAddressResponse{NodeIPAddress: &pb.NodeIPAddress{
+		Id:           int64(address.Id),
+		NodeId:       int64(address.NodeId),
+		Role:         address.Role,
+		Name:         address.Name,
+		Ip:           address.Ip,
+		Description:  address.Description,
+		State:        int64(address.State),
+		Order:        int64(address.Order),
+		CanAccess:    address.CanAccess,
+		IsOn:         address.IsOn,
+		IsUp:         address.IsUp,
+		IsHealthy:    address.IsHealthy,
+		BackupIP:     address.DecodeBackupIP(),
+		NodeClusters: pbNodeClusters,
+	}}, nil
 }
 
-// FindAllEnabledIPAddressesWithNodeId 查找节点的所有地址
-func (this *NodeIPAddressService) FindAllEnabledIPAddressesWithNodeId(ctx context.Context, req *pb.FindAllEnabledIPAddressesWithNodeIdRequest) (*pb.FindAllEnabledIPAddressesWithNodeIdResponse, error) {
+// FindAllEnabledNodeIPAddressesWithNodeId 查找节点的所有地址
+func (this *NodeIPAddressService) FindAllEnabledNodeIPAddressesWithNodeId(ctx context.Context, req *pb.FindAllEnabledNodeIPAddressesWithNodeIdRequest) (*pb.FindAllEnabledNodeIPAddressesWithNodeIdResponse, error) {
 	// 校验请求
-	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
+	_, err := this.ValidateAdmin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := this.NullTx()
+	var tx = this.NullTx()
 
 	addresses, err := models.SharedNodeIPAddressDAO.FindAllEnabledAddressesWithNode(tx, req.NodeId, req.Role)
 	if err != nil {
 		return nil, err
 	}
 
-	result := []*pb.NodeIPAddress{}
+	var result = []*pb.NodeIPAddress{}
+	var cacheMap = utils.NewCacheMap()
 	for _, address := range addresses {
+		// 集群
+		var pbNodeClusters = []*pb.NodeCluster{}
+		var clusterIds = address.DecodeClusterIds()
+		if len(clusterIds) > 0 {
+			if address.Role == nodeconfigs.NodeRoleNode { // 边缘节点
+				for _, clusterId := range clusterIds {
+					nodeCluster, err := models.SharedNodeClusterDAO.FindClusterBasicInfo(tx, clusterId, cacheMap)
+					if err != nil {
+						return nil, err
+					}
+					if nodeCluster != nil {
+						pbNodeClusters = append(pbNodeClusters, &pb.NodeCluster{
+							Id:   int64(nodeCluster.Id),
+							Name: nodeCluster.Name,
+						})
+					}
+				}
+			}
+		}
+
 		result = append(result, &pb.NodeIPAddress{
-			Id:          int64(address.Id),
-			NodeId:      int64(address.NodeId),
-			Name:        address.Name,
-			Ip:          address.Ip,
-			Description: address.Description,
-			State:       int64(address.State),
-			Order:       int64(address.Order),
-			CanAccess:   address.CanAccess == 1,
+			Id:           int64(address.Id),
+			NodeId:       int64(address.NodeId),
+			Role:         address.Role,
+			Name:         address.Name,
+			Ip:           address.Ip,
+			Description:  address.Description,
+			State:        int64(address.State),
+			Order:        int64(address.Order),
+			CanAccess:    address.CanAccess,
+			IsOn:         address.IsOn,
+			IsUp:         address.IsUp,
+			IsHealthy:    address.IsHealthy,
+			BackupIP:     address.DecodeBackupIP(),
+			NodeClusters: pbNodeClusters,
 		})
 	}
 
-	return &pb.FindAllEnabledIPAddressesWithNodeIdResponse{Addresses: result}, nil
+	return &pb.FindAllEnabledNodeIPAddressesWithNodeIdResponse{NodeIPAddresses: result}, nil
+}
+
+// CountAllEnabledNodeIPAddresses 计算IP地址数量
+func (this *NodeIPAddressService) CountAllEnabledNodeIPAddresses(ctx context.Context, req *pb.CountAllEnabledNodeIPAddressesRequest) (*pb.RPCCountResponse, error) {
+	// 校验请求
+	_, err := this.ValidateAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var tx = this.NullTx()
+	count, err := models.SharedNodeIPAddressDAO.CountAllEnabledIPAddresses(tx, req.Role, req.NodeClusterId, types.Int8(req.UpState), req.Keyword)
+	if err != nil {
+		return nil, err
+	}
+
+	return this.SuccessCount(count)
+}
+
+// ListEnabledNodeIPAddresses 列出单页IP地址
+func (this *NodeIPAddressService) ListEnabledNodeIPAddresses(ctx context.Context, req *pb.ListEnabledNodeIPAddressesRequest) (*pb.ListEnabledNodeIPAddressesResponse, error) {
+	// 校验请求
+	_, err := this.ValidateAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var tx = this.NullTx()
+	addresses, err := models.SharedNodeIPAddressDAO.ListEnabledIPAddresses(tx, req.Role, req.NodeClusterId, types.Int8(req.UpState), req.Keyword, req.Offset, req.Size)
+	if err != nil {
+		return nil, err
+	}
+
+	var pbAddrs = []*pb.NodeIPAddress{}
+	for _, addr := range addresses {
+		var clusterIds = addr.DecodeClusterIds()
+		var pbNodeClusters = []*pb.NodeCluster{}
+		if len(clusterIds) > 0 {
+			if addr.Role == nodeconfigs.NodeRoleNode { // 边缘节点
+				for _, clusterId := range clusterIds {
+					cluster, err := models.SharedNodeClusterDAO.FindClusterBasicInfo(tx, clusterId, nil)
+					if err != nil {
+						return nil, err
+					}
+					if cluster != nil {
+						pbNodeClusters = append(pbNodeClusters, &pb.NodeCluster{
+							Id:   int64(cluster.Id),
+							Name: cluster.Name,
+						})
+					}
+				}
+			}
+		}
+
+		pbAddrs = append(pbAddrs, &pb.NodeIPAddress{
+			Id:           int64(addr.Id),
+			NodeId:       int64(addr.NodeId),
+			Role:         addr.Role,
+			Name:         addr.Name,
+			Ip:           addr.Ip,
+			Description:  addr.Description,
+			CanAccess:    addr.CanAccess,
+			IsOn:         addr.IsOn,
+			IsUp:         addr.IsUp,
+			IsHealthy:    addr.IsHealthy,
+			BackupIP:     addr.DecodeBackupIP(),
+			NodeClusters: pbNodeClusters,
+		})
+	}
+	return &pb.ListEnabledNodeIPAddressesResponse{NodeIPAddresses: pbAddrs}, nil
+}
+
+// UpdateNodeIPAddressIsUp 设置上下线状态
+func (this *NodeIPAddressService) UpdateNodeIPAddressIsUp(ctx context.Context, req *pb.UpdateNodeIPAddressIsUpRequest) (*pb.RPCSuccess, error) {
+	// 校验请求
+	adminId, err := this.ValidateAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var tx = this.NullTx()
+	err = models.SharedNodeIPAddressDAO.UpdateAddressIsUp(tx, req.NodeIPAddressId, req.IsUp)
+	if err != nil {
+		return nil, err
+	}
+
+	// 增加日志
+	if req.IsUp {
+		err = models.SharedNodeIPAddressLogDAO.CreateLog(tx, adminId, req.NodeIPAddressId, "手动上线")
+	} else {
+		err = models.SharedNodeIPAddressLogDAO.CreateLog(tx, adminId, req.NodeIPAddressId, "手动下线")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return this.Success()
+}
+
+// RestoreNodeIPAddressBackupIP 还原备用IP状态
+func (this *NodeIPAddressService) RestoreNodeIPAddressBackupIP(ctx context.Context, req *pb.RestoreNodeIPAddressBackupIPRequest) (*pb.RPCSuccess, error) {
+	// 校验请求
+	adminId, err := this.ValidateAdmin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var tx = this.NullTx()
+	err = models.SharedNodeIPAddressDAO.UpdateAddressBackupIP(tx, req.NodeIPAddressId, 0, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// 增加日志
+	err = models.SharedNodeIPAddressLogDAO.CreateLog(tx, adminId, req.NodeIPAddressId, "恢复IP状态")
+	if err != nil {
+		return nil, err
+	}
+
+	return this.Success()
 }
