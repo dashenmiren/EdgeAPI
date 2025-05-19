@@ -1,45 +1,50 @@
 package tasks
 
 import (
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/goman"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
 	"github.com/iwind/TeaGo/dbs"
+	"github.com/iwind/TeaGo/logs"
+	"time"
 )
 
 func init() {
-	dbs.OnReadyDone(func() {
-		goman.New(func() {
-			NewEventLooper(2 * time.Second).Start()
-		})
+	dbs.OnReady(func() {
+		looper := NewEventLooper()
+		go looper.Start()
 	})
 }
 
-// EventLooper 事件相关处理程序
+// 事件相关处理程序
 type EventLooper struct {
-	BaseTask
-
-	ticker *time.Ticker
 }
 
-func NewEventLooper(duration time.Duration) *EventLooper {
-	return &EventLooper{
-		ticker: time.NewTicker(duration),
-	}
+func NewEventLooper() *EventLooper {
+	return &EventLooper{}
 }
 
 func (this *EventLooper) Start() {
-	for range this.ticker.C {
-		err := this.Loop()
+	ticker := time.NewTicker(2 * time.Second)
+	for range ticker.C {
+		err := this.loop()
 		if err != nil {
-			this.logErr("EventLooper", err.Error())
+			logs.Println("[EVENT_LOOPER]" + err.Error())
 		}
 	}
 }
 
-func (this *EventLooper) Loop() error {
-	if !this.IsPrimaryNode() {
+func (this *EventLooper) loop() error {
+	lockerKey := "eventLooper"
+	isOk, err := models.SharedSysLockerDAO.Lock(nil, lockerKey, 3600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = models.SharedSysLockerDAO.Unlock(nil, lockerKey)
+		if err != nil {
+			logs.Println("[EVENT_LOOPER]" + err.Error())
+		}
+	}()
+	if !isOk {
 		return nil
 	}
 
@@ -50,12 +55,12 @@ func (this *EventLooper) Loop() error {
 	for _, eventOne := range events {
 		event, err := eventOne.DecodeEvent()
 		if err != nil {
-			this.logErr("EventLooper", err.Error())
+			logs.Println("[EVENT_LOOPER]" + err.Error())
 			continue
 		}
 		err = event.Run()
 		if err != nil {
-			this.logErr("EventLooper", err.Error())
+			logs.Println("[EVENT_LOOPER]" + err.Error())
 			continue
 		}
 		err = models.SharedSysEventDAO.DeleteEvent(nil, int64(eventOne.Id))

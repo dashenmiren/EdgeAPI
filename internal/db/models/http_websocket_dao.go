@@ -3,9 +3,8 @@ package models
 import (
 	"encoding/json"
 	"errors"
-
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/shared"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -38,7 +37,7 @@ func init() {
 	})
 }
 
-// EnableHTTPWebsocket 启用条目
+// 启用条目
 func (this *HTTPWebsocketDAO) EnableHTTPWebsocket(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -47,7 +46,7 @@ func (this *HTTPWebsocketDAO) EnableHTTPWebsocket(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// DisableHTTPWebsocket 禁用条目
+// 禁用条目
 func (this *HTTPWebsocketDAO) DisableHTTPWebsocket(tx *dbs.Tx, websocketId int64) error {
 	_, err := this.Query(tx).
 		Pk(websocketId).
@@ -59,7 +58,7 @@ func (this *HTTPWebsocketDAO) DisableHTTPWebsocket(tx *dbs.Tx, websocketId int64
 	return this.NotifyUpdate(tx, websocketId)
 }
 
-// FindEnabledHTTPWebsocket 查找启用中的条目
+// 查找启用中的条目
 func (this *HTTPWebsocketDAO) FindEnabledHTTPWebsocket(tx *dbs.Tx, id int64) (*HTTPWebsocket, error) {
 	result, err := this.Query(tx).
 		Pk(id).
@@ -71,7 +70,7 @@ func (this *HTTPWebsocketDAO) FindEnabledHTTPWebsocket(tx *dbs.Tx, id int64) (*H
 	return result.(*HTTPWebsocket), err
 }
 
-// ComposeWebsocketConfig 组合配置
+// 组合配置
 func (this *HTTPWebsocketDAO) ComposeWebsocketConfig(tx *dbs.Tx, websocketId int64) (*serverconfigs.HTTPWebsocketConfig, error) {
 	websocket, err := this.FindEnabledHTTPWebsocket(tx, websocketId)
 	if err != nil {
@@ -82,12 +81,12 @@ func (this *HTTPWebsocketDAO) ComposeWebsocketConfig(tx *dbs.Tx, websocketId int
 	}
 	config := &serverconfigs.HTTPWebsocketConfig{}
 	config.Id = int64(websocket.Id)
-	config.IsOn = websocket.IsOn
+	config.IsOn = websocket.IsOn == 1
 	config.AllowAllOrigins = websocket.AllowAllOrigins == 1
 
 	if IsNotNull(websocket.AllowedOrigins) {
 		origins := []string{}
-		err = json.Unmarshal(websocket.AllowedOrigins, &origins)
+		err = json.Unmarshal([]byte(websocket.AllowedOrigins), &origins)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +95,7 @@ func (this *HTTPWebsocketDAO) ComposeWebsocketConfig(tx *dbs.Tx, websocketId int
 
 	if IsNotNull(websocket.HandshakeTimeout) {
 		duration := &shared.TimeDuration{}
-		err = json.Unmarshal(websocket.HandshakeTimeout, duration)
+		err = json.Unmarshal([]byte(websocket.HandshakeTimeout), duration)
 		if err != nil {
 			return nil, err
 		}
@@ -109,9 +108,9 @@ func (this *HTTPWebsocketDAO) ComposeWebsocketConfig(tx *dbs.Tx, websocketId int
 	return config, nil
 }
 
-// CreateWebsocket 创建Websocket配置
+// 创建Websocket配置
 func (this *HTTPWebsocketDAO) CreateWebsocket(tx *dbs.Tx, handshakeTimeoutJSON []byte, allowAllOrigins bool, allowedOrigins []string, requestSameOrigin bool, requestOrigin string) (websocketId int64, err error) {
-	var op = NewHTTPWebsocketOperator()
+	op := NewHTTPWebsocketOperator()
 	op.IsOn = true
 	op.State = HTTPWebsocketStateEnabled
 	if len(handshakeTimeoutJSON) > 0 {
@@ -131,12 +130,12 @@ func (this *HTTPWebsocketDAO) CreateWebsocket(tx *dbs.Tx, handshakeTimeoutJSON [
 	return types.Int64(op.Id), err
 }
 
-// UpdateWebsocket 修改Websocket配置
+// 修改Websocket配置
 func (this *HTTPWebsocketDAO) UpdateWebsocket(tx *dbs.Tx, websocketId int64, handshakeTimeoutJSON []byte, allowAllOrigins bool, allowedOrigins []string, requestSameOrigin bool, requestOrigin string) error {
 	if websocketId <= 0 {
 		return errors.New("invalid websocketId")
 	}
-	var op = NewHTTPWebsocketOperator()
+	op := NewHTTPWebsocketOperator()
 	op.Id = websocketId
 	if len(handshakeTimeoutJSON) > 0 {
 		op.HandshakeTimeout = handshakeTimeoutJSON
@@ -160,32 +159,7 @@ func (this *HTTPWebsocketDAO) UpdateWebsocket(tx *dbs.Tx, websocketId int64, han
 	return this.NotifyUpdate(tx, websocketId)
 }
 
-// CloneWebsocket 复制配置
-func (this *HTTPWebsocketDAO) CloneWebsocket(tx *dbs.Tx, fromWebsocketId int64) (newWebsocketId int64, err error) {
-	websocketOne, err := this.Query(tx).
-		Pk(fromWebsocketId).
-		Find()
-	if err != nil || websocketOne == nil {
-		return 0, err
-	}
-	var websocket = websocketOne.(*HTTPWebsocket)
-
-	var op = NewHTTPWebsocketOperator()
-	op.State = websocket.State
-	op.IsOn = websocket.IsOn
-	if len(websocket.HandshakeTimeout) > 0 {
-		op.HandshakeTimeout = websocket.HandshakeTimeout
-	}
-	op.AllowAllOrigins = websocket.AllowAllOrigins
-	if len(websocket.AllowedOrigins) > 0 {
-		op.AllowedOrigins = websocket.AllowedOrigins
-	}
-	op.RequestSameOrigin = websocket.RequestSameOrigin
-	op.RequestOrigin = websocket.RequestOrigin
-	return this.SaveInt64(tx, op)
-}
-
-// NotifyUpdate 通知更新
+// 通知更新
 func (this *HTTPWebsocketDAO) NotifyUpdate(tx *dbs.Tx, websocketId int64) error {
 	webId, err := SharedHTTPWebDAO.FindEnabledWebIdWithWebsocketId(tx, websocketId)
 	if err != nil {

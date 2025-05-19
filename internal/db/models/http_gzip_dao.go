@@ -3,9 +3,8 @@ package models
 import (
 	"encoding/json"
 	"errors"
-
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/shared"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -38,12 +37,12 @@ func init() {
 	})
 }
 
-// Init 初始化
+// 初始化
 func (this *HTTPGzipDAO) Init() {
 	_ = this.DAOObject.Init()
 }
 
-// EnableHTTPGzip 启用条目
+// 启用条目
 func (this *HTTPGzipDAO) EnableHTTPGzip(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -52,7 +51,7 @@ func (this *HTTPGzipDAO) EnableHTTPGzip(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// DisableHTTPGzip 禁用条目
+// 禁用条目
 func (this *HTTPGzipDAO) DisableHTTPGzip(tx *dbs.Tx, gzipId int64) error {
 	_, err := this.Query(tx).
 		Pk(gzipId).
@@ -64,7 +63,7 @@ func (this *HTTPGzipDAO) DisableHTTPGzip(tx *dbs.Tx, gzipId int64) error {
 	return this.NotifyUpdate(tx, gzipId)
 }
 
-// FindEnabledHTTPGzip 查找启用中的条目
+// 查找启用中的条目
 func (this *HTTPGzipDAO) FindEnabledHTTPGzip(tx *dbs.Tx, id int64) (*HTTPGzip, error) {
 	result, err := this.Query(tx).
 		Pk(id).
@@ -76,8 +75,8 @@ func (this *HTTPGzipDAO) FindEnabledHTTPGzip(tx *dbs.Tx, id int64) (*HTTPGzip, e
 	return result.(*HTTPGzip), err
 }
 
-// ComposeGzipConfig 组合配置
-func (this *HTTPGzipDAO) ComposeGzipConfig(tx *dbs.Tx, gzipId int64) (*serverconfigs.HTTPGzipCompressionConfig, error) {
+// 组合配置
+func (this *HTTPGzipDAO) ComposeGzipConfig(tx *dbs.Tx, gzipId int64) (*serverconfigs.HTTPGzipConfig, error) {
 	gzip, err := this.FindEnabledHTTPGzip(tx, gzipId)
 	if err != nil {
 		return nil, err
@@ -87,12 +86,12 @@ func (this *HTTPGzipDAO) ComposeGzipConfig(tx *dbs.Tx, gzipId int64) (*servercon
 		return nil, nil
 	}
 
-	config := &serverconfigs.HTTPGzipCompressionConfig{}
+	config := &serverconfigs.HTTPGzipConfig{}
 	config.Id = int64(gzip.Id)
-	config.IsOn = gzip.IsOn
+	config.IsOn = gzip.IsOn == 1
 	if IsNotNull(gzip.MinLength) {
 		minLengthConfig := &shared.SizeCapacity{}
-		err = json.Unmarshal(gzip.MinLength, minLengthConfig)
+		err = json.Unmarshal([]byte(gzip.MinLength), minLengthConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +99,7 @@ func (this *HTTPGzipDAO) ComposeGzipConfig(tx *dbs.Tx, gzipId int64) (*servercon
 	}
 	if IsNotNull(gzip.MaxLength) {
 		maxLengthConfig := &shared.SizeCapacity{}
-		err = json.Unmarshal(gzip.MaxLength, maxLengthConfig)
+		err = json.Unmarshal([]byte(gzip.MaxLength), maxLengthConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +109,7 @@ func (this *HTTPGzipDAO) ComposeGzipConfig(tx *dbs.Tx, gzipId int64) (*servercon
 
 	if IsNotNull(gzip.Conds) {
 		condsConfig := &shared.HTTPRequestCondsConfig{}
-		err = json.Unmarshal(gzip.Conds, condsConfig)
+		err = json.Unmarshal([]byte(gzip.Conds), condsConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -120,9 +119,9 @@ func (this *HTTPGzipDAO) ComposeGzipConfig(tx *dbs.Tx, gzipId int64) (*servercon
 	return config, nil
 }
 
-// CreateGzip 创建Gzip
+// 创建Gzip
 func (this *HTTPGzipDAO) CreateGzip(tx *dbs.Tx, level int, minLengthJSON []byte, maxLengthJSON []byte, condsJSON []byte) (int64, error) {
-	var op = NewHTTPGzipOperator()
+	op := NewHTTPGzipOperator()
 	op.State = HTTPGzipStateEnabled
 	op.IsOn = true
 	op.Level = level
@@ -142,12 +141,12 @@ func (this *HTTPGzipDAO) CreateGzip(tx *dbs.Tx, level int, minLengthJSON []byte,
 	return types.Int64(op.Id), nil
 }
 
-// UpdateGzip 修改Gzip
+// 修改Gzip
 func (this *HTTPGzipDAO) UpdateGzip(tx *dbs.Tx, gzipId int64, level int, minLengthJSON []byte, maxLengthJSON []byte, condsJSON []byte) error {
 	if gzipId <= 0 {
 		return errors.New("invalid gzipId")
 	}
-	var op = NewHTTPGzipOperator()
+	op := NewHTTPGzipOperator()
 	op.Id = gzipId
 	op.Level = level
 	if len(minLengthJSON) > 0 {
@@ -166,7 +165,7 @@ func (this *HTTPGzipDAO) UpdateGzip(tx *dbs.Tx, gzipId int64, level int, minLeng
 	return this.NotifyUpdate(tx, gzipId)
 }
 
-// NotifyUpdate 通知更新
+// 通知更新
 func (this *HTTPGzipDAO) NotifyUpdate(tx *dbs.Tx, gzipId int64) error {
 	webId, err := SharedHTTPWebDAO.FindEnabledWebIdWithGzipId(tx, gzipId)
 	if err != nil {

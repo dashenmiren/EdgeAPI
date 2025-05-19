@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -40,7 +40,7 @@ func init() {
 	})
 }
 
-// EnableLogin 启用条目
+// 启用条目
 func (this *LoginDAO) EnableLogin(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -49,7 +49,7 @@ func (this *LoginDAO) EnableLogin(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// DisableLogin 禁用条目
+// 禁用条目
 func (this *LoginDAO) DisableLogin(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -58,7 +58,7 @@ func (this *LoginDAO) DisableLogin(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// FindEnabledLogin 查找启用中的条目
+// 查找启用中的条目
 func (this *LoginDAO) FindEnabledLogin(tx *dbs.Tx, id int64) (*Login, error) {
 	result, err := this.Query(tx).
 		Pk(id).
@@ -70,7 +70,7 @@ func (this *LoginDAO) FindEnabledLogin(tx *dbs.Tx, id int64) (*Login, error) {
 	return result.(*Login), err
 }
 
-// CreateLogin 创建认证
+// 创建认证
 func (this *LoginDAO) CreateLogin(tx *dbs.Tx, Id int64, loginType LoginType, params maps.Map) (int64, error) {
 	if Id <= 0 {
 		return 0, errors.New("invalid Id")
@@ -78,7 +78,7 @@ func (this *LoginDAO) CreateLogin(tx *dbs.Tx, Id int64, loginType LoginType, par
 	if params == nil {
 		params = maps.Map{}
 	}
-	var op = NewLoginOperator()
+	op := NewLoginOperator()
 	op.Id = Id
 	op.Type = loginType
 	op.Params = params.AsJSON()
@@ -87,34 +87,23 @@ func (this *LoginDAO) CreateLogin(tx *dbs.Tx, Id int64, loginType LoginType, par
 	return this.SaveInt64(tx, op)
 }
 
-// UpdateLogin 修改认证
-func (this *LoginDAO) UpdateLogin(tx *dbs.Tx, adminId int64, userId int64, loginType LoginType, params maps.Map, isOn bool) error {
-	if adminId <= 0 && userId <= 0 {
-		return errors.New("invalid adminId and userId")
-	}
-
+// 修改认证
+func (this *LoginDAO) UpdateLogin(tx *dbs.Tx, adminId int64, loginType LoginType, params maps.Map, isOn bool) error {
 	// 是否已经存在
-	var query = this.Query(tx).
+	loginId, err := this.Query(tx).
+		Attr("adminId", adminId).
 		Attr("type", loginType).
 		State(LoginStateEnabled).
-		ResultPk()
-
-	if adminId > 0 {
-		query.Attr("adminId", adminId)
-	} else if userId > 0 {
-		query.Attr("userId", userId)
-	}
-
-	loginId, err := query.FindInt64Col(0)
+		ResultPk().
+		FindInt64Col(0)
 	if err != nil {
 		return err
 	}
-	var op = NewLoginOperator()
+	op := NewLoginOperator()
 	if loginId > 0 {
 		op.Id = loginId
 	} else {
 		op.AdminId = adminId
-		op.UserId = userId
 		op.Type = loginType
 		op.State = LoginStateEnabled
 	}
@@ -128,54 +117,35 @@ func (this *LoginDAO) UpdateLogin(tx *dbs.Tx, adminId int64, userId int64, login
 	return this.Save(tx, op)
 }
 
-// DisableLoginWithType 禁用相关认证
-func (this *LoginDAO) DisableLoginWithType(tx *dbs.Tx, adminId int64, userId int64, loginType LoginType) error {
-	var query = this.Query(tx).
+// 禁用相关认证
+func (this *LoginDAO) DisableLoginWithAdminId(tx *dbs.Tx, adminId int64, loginType LoginType) error {
+	_, err := this.Query(tx).
+		Attr("adminId", adminId).
 		Attr("type", loginType).
-		Set("isOn", false)
-
-	if adminId > 0 {
-		query.Attr("adminId", adminId)
-	} else if userId > 0 {
-		query.Attr("userId", userId)
-	}
-
-	_, err := query.
+		Set("isOn", false).
 		Update()
 	return err
 }
 
-// FindEnabledLoginWithType 查找管理员和用户相关的认证
-func (this *LoginDAO) FindEnabledLoginWithType(tx *dbs.Tx, adminId int64, userId int64, loginType LoginType) (*Login, error) {
-	var query = this.Query(tx).
+// 查找管理员相关的认证
+func (this *LoginDAO) FindEnabledLoginWithAdminId(tx *dbs.Tx, adminId int64, loginType LoginType) (*Login, error) {
+	one, err := this.Query(tx).
+		Attr("adminId", adminId).
 		Attr("type", loginType).
-		State(LoginStateEnabled)
-
-	if adminId > 0 {
-		query.Attr("adminId", adminId)
-	} else if userId > 0 {
-		query.Attr("userId", userId)
-	}
-
-	one, err := query.Find()
+		State(LoginStateEnabled).
+		Find()
 	if err != nil || one == nil {
 		return nil, err
 	}
 	return one.(*Login), nil
 }
 
-// CheckLoginIsOn 检查某个认证是否启用
-func (this *LoginDAO) CheckLoginIsOn(tx *dbs.Tx, adminId int64, userId int64, loginType LoginType) (bool, error) {
-	var query = this.Query(tx).
+// 检查某个认证是否启用
+func (this *LoginDAO) CheckLoginIsOn(tx *dbs.Tx, adminId int64, loginType LoginType) (bool, error) {
+	return this.Query(tx).
+		Attr("adminId", adminId).
 		Attr("type", loginType).
 		State(LoginStateEnabled).
-		Attr("isOn", true)
-
-	if adminId > 0 {
-		query.Attr("adminId", adminId)
-	} else if userId > 0 {
-		query.Attr("userId", userId)
-	}
-
-	return query.Exist()
+		Attr("isOn", true).
+		Exist()
 }

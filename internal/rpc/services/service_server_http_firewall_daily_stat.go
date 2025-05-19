@@ -2,25 +2,23 @@ package services
 
 import (
 	"context"
-	"sort"
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
-	"github.com/dashenmiren/EdgeAPI/internal/utils"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models/stats"
+	"github.com/TeaOSLab/EdgeAPI/internal/utils"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
+	"time"
 )
 
-// ServerHTTPFirewallDailyStatService WAF统计
+// WAF统计
 type ServerHTTPFirewallDailyStatService struct {
 	BaseService
 }
 
-// ComposeServerHTTPFirewallDashboard 组合Dashboard
+// 组合Dashboard
 func (this *ServerHTTPFirewallDailyStatService) ComposeServerHTTPFirewallDashboard(ctx context.Context, req *pb.ComposeServerHTTPFirewallDashboardRequest) (*pb.ComposeServerHTTPFirewallDashboardResponse, error) {
-	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -92,13 +90,10 @@ func (this *ServerHTTPFirewallDailyStatService) ComposeServerHTTPFirewallDashboa
 	}
 
 	// 规则分组
-	groupStats, err := stats.SharedServerHTTPFirewallDailyStatDAO.GroupDailyCount(tx, userId, req.ServerId, monthFrom, monthTo, 0, 20)
+	groupStats, err := stats.SharedServerHTTPFirewallDailyStatDAO.GroupDailyCount(tx, userId, req.ServerId, monthFrom, monthTo, 0, 10)
 	if err != nil {
 		return nil, err
 	}
-
-	// 合并同名
-	var groupNamedStatsMap = map[string]*stats.ServerHTTPFirewallDailyStat{} // name => *ServerHTTPFirewallDailyStat
 	for _, stat := range groupStats {
 		ruleGroupName, err := models.SharedHTTPFirewallRuleGroupDAO.FindHTTPFirewallRuleGroupName(tx, int64(stat.HttpFirewallRuleGroupId))
 		if err != nil {
@@ -108,25 +103,10 @@ func (this *ServerHTTPFirewallDailyStatService) ComposeServerHTTPFirewallDashboa
 			continue
 		}
 
-		namedStat, ok := groupNamedStatsMap[ruleGroupName]
-		if ok {
-			namedStat.Count += stat.Count
-		} else {
-			groupNamedStatsMap[ruleGroupName] = stat
-		}
-	}
-
-	for ruleGroupName, stat := range groupNamedStatsMap {
 		resp.HttpFirewallRuleGroups = append(resp.HttpFirewallRuleGroups, &pb.ComposeServerHTTPFirewallDashboardResponse_HTTPFirewallRuleGroupStat{
 			HttpFirewallRuleGroup: &pb.HTTPFirewallRuleGroup{Id: int64(stat.HttpFirewallRuleGroupId), Name: ruleGroupName},
 			Count:                 int64(stat.Count),
 		})
-	}
-	sort.Slice(resp.HttpFirewallRuleGroups, func(i, j int) bool {
-		return resp.HttpFirewallRuleGroups[i].Count > resp.HttpFirewallRuleGroups[j].Count
-	})
-	if len(resp.HttpFirewallRuleGroups) > 10 {
-		resp.HttpFirewallRuleGroups = resp.HttpFirewallRuleGroups[:10]
 	}
 
 	// 每日趋势
@@ -136,7 +116,7 @@ func (this *ServerHTTPFirewallDailyStatService) ComposeServerHTTPFirewallDashboa
 		return nil, err
 	}
 	{
-		statList, err := stats.SharedServerHTTPFirewallDailyStatDAO.FindDailyStats(tx, userId, req.ServerId, []string{"log", "tag"}, dayBefore, day)
+		statList, err := stats.SharedServerHTTPFirewallDailyStatDAO.FindDailyStats(tx, userId, req.ServerId, "log", dayBefore, day)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +129,7 @@ func (this *ServerHTTPFirewallDailyStatService) ComposeServerHTTPFirewallDashboa
 		}
 	}
 	{
-		statList, err := stats.SharedServerHTTPFirewallDailyStatDAO.FindDailyStats(tx, userId, req.ServerId, []string{"block", "page"}, dayBefore, day)
+		statList, err := stats.SharedServerHTTPFirewallDailyStatDAO.FindDailyStats(tx, userId, req.ServerId, "block", dayBefore, day)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +142,7 @@ func (this *ServerHTTPFirewallDailyStatService) ComposeServerHTTPFirewallDashboa
 		}
 	}
 	{
-		statList, err := stats.SharedServerHTTPFirewallDailyStatDAO.FindDailyStats(tx, userId, req.ServerId, []string{"captcha"}, dayBefore, day)
+		statList, err := stats.SharedServerHTTPFirewallDailyStatDAO.FindDailyStats(tx, userId, req.ServerId, "captcha", dayBefore, day)
 		if err != nil {
 			return nil, err
 		}

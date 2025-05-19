@@ -1,36 +1,15 @@
 package stats
 
 import (
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeAPI/internal/goman"
-	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
-	"github.com/iwind/TeaGo/rands"
-	timeutil "github.com/iwind/TeaGo/utils/time"
 )
 
 type ServerHTTPFirewallDailyStatDAO dbs.DAO
-
-func init() {
-	dbs.OnReadyDone(func() {
-		// 清理数据任务
-		var ticker = time.NewTicker(time.Duration(rands.Int(24, 48)) * time.Hour)
-		goman.New(func() {
-			for range ticker.C {
-				err := SharedServerHTTPFirewallDailyStatDAO.Clean(nil, 30) // 只保留N天
-				if err != nil {
-					remotelogs.Error("ServerHTTPFirewallDailyStatDAO", "clean expired data failed: "+err.Error())
-				}
-			}
-		})
-	})
-}
 
 func NewServerHTTPFirewallDailyStatDAO() *ServerHTTPFirewallDailyStatDAO {
 	return dbs.NewDAO(&ServerHTTPFirewallDailyStatDAO{
@@ -51,7 +30,7 @@ func init() {
 	})
 }
 
-// IncreaseDailyCount 增加数量
+// 增加数量
 func (this *ServerHTTPFirewallDailyStatDAO) IncreaseDailyCount(tx *dbs.Tx, serverId int64, firewallRuleGroupId int64, action string, day string, count int64) error {
 	if len(day) != 8 {
 		return errors.New("invalid day '" + day + "'")
@@ -73,7 +52,7 @@ func (this *ServerHTTPFirewallDailyStatDAO) IncreaseDailyCount(tx *dbs.Tx, serve
 	return nil
 }
 
-// SumDailyCount 计算某天的数据
+// 计算某天的数据
 func (this *ServerHTTPFirewallDailyStatDAO) SumDailyCount(tx *dbs.Tx, userId int64, serverId int64, action string, dayFrom string, dayTo string) (int64, error) {
 	query := this.Query(tx).
 		Between("day", dayFrom, dayTo)
@@ -89,7 +68,7 @@ func (this *ServerHTTPFirewallDailyStatDAO) SumDailyCount(tx *dbs.Tx, userId int
 	return query.SumInt64("count", 0)
 }
 
-// GroupDailyCount 查询规则分组数量
+// 查询规则分组数量
 func (this *ServerHTTPFirewallDailyStatDAO) GroupDailyCount(tx *dbs.Tx, userId int64, serverId int64, dayFrom string, dayTo string, offset int64, size int64) (result []*ServerHTTPFirewallDailyStat, err error) {
 	query := this.Query(tx).
 		Between("day", dayFrom, dayTo)
@@ -109,14 +88,11 @@ func (this *ServerHTTPFirewallDailyStatDAO) GroupDailyCount(tx *dbs.Tx, userId i
 	return
 }
 
-// FindDailyStats 查询某个日期段内的记录
-func (this *ServerHTTPFirewallDailyStatDAO) FindDailyStats(tx *dbs.Tx, userId int64, serverId int64, actions []string, dayFrom string, dayTo string) (result []*ServerHTTPFirewallDailyStat, err error) {
-	if len(actions) == 0 {
-		return nil, nil
-	}
+// 查询某个日期段内的记录
+func (this *ServerHTTPFirewallDailyStatDAO) FindDailyStats(tx *dbs.Tx, userId int64, serverId int64, action string, dayFrom string, dayTo string) (result []*ServerHTTPFirewallDailyStat, err error) {
 	query := this.Query(tx).
 		Between("day", dayFrom, dayTo).
-		Attr("action", actions)
+		Attr("action", action)
 	if serverId > 0 {
 		query.Attr("serverId", serverId)
 	} else if userId > 0 {
@@ -128,13 +104,4 @@ func (this *ServerHTTPFirewallDailyStatDAO) FindDailyStats(tx *dbs.Tx, userId in
 		Slice(&result).
 		FindAll()
 	return
-}
-
-// Clean 清理历史数据
-func (this *ServerHTTPFirewallDailyStatDAO) Clean(tx *dbs.Tx, days int) error {
-	var day = timeutil.Format("Ymd", time.Now().AddDate(0, 0, -days))
-	_, err := this.Query(tx).
-		Lt("day", day).
-		Delete()
-	return err
 }

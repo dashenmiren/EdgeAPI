@@ -1,9 +1,8 @@
 package installers
 
 import (
-	"testing"
-
 	_ "github.com/iwind/TeaGo/bootstrap"
+	"testing"
 )
 
 func TestBaseInstaller_LookupLatest(t *testing.T) {

@@ -2,20 +2,19 @@ package services
 
 import (
 	"context"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models/stats"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
 )
 
-// ServerClientSystemMonthlyStatService 操作系统统计
+// 操作系统统计
 type ServerClientSystemMonthlyStatService struct {
 	BaseService
 }
 
-// FindTopServerClientSystemMonthlyStats 查找前N个操作系统
+// 查找前N个操作系统
 func (this *ServerClientSystemMonthlyStatService) FindTopServerClientSystemMonthlyStats(ctx context.Context, req *pb.FindTopServerClientSystemMonthlyStatsRequest) (*pb.FindTopServerClientSystemMonthlyStatsResponse, error) {
-	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -32,13 +31,13 @@ func (this *ServerClientSystemMonthlyStatService) FindTopServerClientSystemMonth
 	if err != nil {
 		return nil, err
 	}
-	var pbStats = []*pb.FindTopServerClientSystemMonthlyStatsResponse_Stat{}
+	pbStats := []*pb.FindTopServerClientSystemMonthlyStatsResponse_Stat{}
 	for _, stat := range statList {
 		pbStat := &pb.FindTopServerClientSystemMonthlyStatsResponse_Stat{
 			Count:   int64(stat.Count),
 			Version: stat.Version,
 		}
-		system, err := models.SharedFormalClientSystemDAO.FindEnabledFormalClientSystem(tx, int64(stat.SystemId))
+		system, err := models.SharedClientSystemDAO.FindEnabledClientSystem(tx, int64(stat.SystemId))
 		if err != nil {
 			return nil, err
 		}

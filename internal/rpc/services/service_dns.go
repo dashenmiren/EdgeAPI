@@ -2,10 +2,9 @@ package services
 
 import (
 	"context"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns/dnsutils"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	rpcutils "github.com/TeaOSLab/EdgeAPI/internal/rpc/utils"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
 )
 
 // DNSService DNS相关服务
@@ -16,7 +15,7 @@ type DNSService struct {
 // FindAllDNSIssues 查找问题
 func (this *DNSService) FindAllDNSIssues(ctx context.Context, req *pb.FindAllDNSIssuesRequest) (*pb.FindAllDNSIssuesResponse, error) {
 	// 校验请求
-	_, err := this.ValidateAdmin(ctx)
+	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +40,7 @@ func (this *DNSService) FindAllDNSIssues(ctx context.Context, req *pb.FindAllDNS
 		clusters = []*models.NodeCluster{cluster}
 	}
 	for _, cluster := range clusters {
-		issues, err := dnsutils.CheckClusterDNS(tx, cluster, true)
+		issues, err := models.SharedNodeClusterDAO.CheckClusterDNS(tx, cluster)
 		if err != nil {
 			return nil, err
 		}

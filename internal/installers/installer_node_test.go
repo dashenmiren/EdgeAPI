@@ -1,9 +1,8 @@
 package installers
 
 import (
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
 	"testing"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 )
 
 func TestNodeInstaller_Install(t *testing.T) {
@@ -29,7 +28,7 @@ func TestNodeInstaller_Install(t *testing.T) {
 
 	// 安装
 	err = installer.Install("/opt/edge", &NodeParams{
-		Endpoints: []string{"http://192.168.2.40:8003"},
+		Endpoints: []string{"192.168.2.40:8003"},
 		NodeId:    "313fdb1b90d0a63c736f307b4d1ca358",
 		Secret:    "Pl3u5kYqBDZddp7raw6QfHiuGPRCWF54",
 	}, &models.NodeInstallStatus{})

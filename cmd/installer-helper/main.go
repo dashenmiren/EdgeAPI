@@ -1,13 +1,10 @@
 package main
 
-// 注意这里的依赖文件应该最小化，从而使编译后的文件最小化
 import (
 	"flag"
+	"github.com/TeaOSLab/EdgeAPI/internal/utils"
+	"net"
 	"os"
-	"os/exec"
-
-	"github.com/dashenmiren/EdgeAPI/internal/installers/helpers"
-	"github.com/iwind/gosock/pkg/gosock"
 )
 
 func main() {
@@ -27,21 +24,11 @@ func main() {
 		stderr("need '-cmd=COMMAND' argument")
 	} else if cmd == "test" {
 		// 检查是否正在运行
-		var sock = gosock.NewTmpSock("edge-node")
-		if sock.IsListening() {
-			// 从systemd中停止
-			systemctl, _ := exec.LookPath("systemctl")
-			if len(systemctl) > 0 {
-				systemctlCmd := exec.Command(systemctl, "stop", "edge-node")
-				_ = systemctlCmd.Run()
-			}
-
-			// 从进程中停止
-			if sock.IsListening() {
-				_, _ = sock.Send(&gosock.Command{
-					Code: "stop",
-				})
-			}
+		path := os.TempDir() + "/edge-node.sock"
+		conn, err := net.Dial("unix", path)
+		if err == nil {
+			_ = conn.Close()
+			stderr("test node status: edge node is running now, can not install again")
 		}
 	} else if cmd == "unzip" { // 解压
 		if len(zipPath) == 0 {
@@ -53,7 +40,7 @@ func main() {
 			return
 		}
 
-		var unzip = helpers.NewUnzip(zipPath, targetPath)
+		unzip := utils.NewUnzip(zipPath, targetPath)
 		err := unzip.Run()
 		if err != nil {
 			stderr("ERROR: " + err.Error())

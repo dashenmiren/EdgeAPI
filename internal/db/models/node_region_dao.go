@@ -2,9 +2,8 @@ package models
 
 import (
 	"encoding/json"
-
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeAPI/internal/utils/numberutils"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -36,7 +35,7 @@ func init() {
 	})
 }
 
-// EnableNodeRegion 启用条目
+// 启用条目
 func (this *NodeRegionDAO) EnableNodeRegion(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -45,7 +44,7 @@ func (this *NodeRegionDAO) EnableNodeRegion(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// DisableNodeRegion 禁用条目
+// 禁用条目
 func (this *NodeRegionDAO) DisableNodeRegion(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -54,7 +53,7 @@ func (this *NodeRegionDAO) DisableNodeRegion(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// FindEnabledNodeRegion 查找启用中的条目
+// 查找启用中的条目
 func (this *NodeRegionDAO) FindEnabledNodeRegion(tx *dbs.Tx, id int64) (*NodeRegion, error) {
 	result, err := this.Query(tx).
 		Pk(id).
@@ -66,7 +65,7 @@ func (this *NodeRegionDAO) FindEnabledNodeRegion(tx *dbs.Tx, id int64) (*NodeReg
 	return result.(*NodeRegion), err
 }
 
-// FindNodeRegionName 根据主键查找名称
+// 根据主键查找名称
 func (this *NodeRegionDAO) FindNodeRegionName(tx *dbs.Tx, id int64) (string, error) {
 	return this.Query(tx).
 		Pk(id).
@@ -74,9 +73,9 @@ func (this *NodeRegionDAO) FindNodeRegionName(tx *dbs.Tx, id int64) (string, err
 		FindStringCol("")
 }
 
-// CreateRegion 创建区域
+// 创建区域
 func (this *NodeRegionDAO) CreateRegion(tx *dbs.Tx, adminId int64, name string, description string) (int64, error) {
-	var op = NewNodeRegionOperator()
+	op := NewNodeRegionOperator()
 	op.AdminId = adminId
 	op.Name = name
 	op.Description = description
@@ -85,12 +84,12 @@ func (this *NodeRegionDAO) CreateRegion(tx *dbs.Tx, adminId int64, name string, 
 	return this.SaveInt64(tx, op)
 }
 
-// UpdateRegion 修改区域
+// 修改区域
 func (this *NodeRegionDAO) UpdateRegion(tx *dbs.Tx, regionId int64, name string, description string, isOn bool) error {
 	if regionId <= 0 {
 		return errors.New("invalid regionId")
 	}
-	var op = NewNodeRegionOperator()
+	op := NewNodeRegionOperator()
 	op.Id = regionId
 	op.Name = name
 	op.Description = description
@@ -98,7 +97,7 @@ func (this *NodeRegionDAO) UpdateRegion(tx *dbs.Tx, regionId int64, name string,
 	return this.Save(tx, op)
 }
 
-// FindAllEnabledRegions 列出所有区域
+// 列出所有区域
 func (this *NodeRegionDAO) FindAllEnabledRegions(tx *dbs.Tx) (result []*NodeRegion, err error) {
 	_, err = this.Query(tx).
 		State(NodeRegionStateEnabled).
@@ -109,7 +108,7 @@ func (this *NodeRegionDAO) FindAllEnabledRegions(tx *dbs.Tx) (result []*NodeRegi
 	return
 }
 
-// FindAllEnabledRegionPrices 列出所有价格
+// 列出所有价格
 func (this *NodeRegionDAO) FindAllEnabledRegionPrices(tx *dbs.Tx) (result []*NodeRegion, err error) {
 	_, err = this.Query(tx).
 		State(NodeRegionStateEnabled).
@@ -121,8 +120,8 @@ func (this *NodeRegionDAO) FindAllEnabledRegionPrices(tx *dbs.Tx) (result []*Nod
 	return
 }
 
-// FindAllAvailableRegions 列出所有启用的区域
-func (this *NodeRegionDAO) FindAllAvailableRegions(tx *dbs.Tx) (result []*NodeRegion, err error) {
+// 列出所有启用的区域
+func (this *NodeRegionDAO) FindAllEnabledAndOnRegions(tx *dbs.Tx) (result []*NodeRegion, err error) {
 	_, err = this.Query(tx).
 		State(NodeRegionStateEnabled).
 		Attr("isOn", true).
@@ -133,26 +132,7 @@ func (this *NodeRegionDAO) FindAllAvailableRegions(tx *dbs.Tx) (result []*NodeRe
 	return
 }
 
-// FindAllRegionIds 查找所有区域ID
-func (this *NodeRegionDAO) FindAllRegionIds(tx *dbs.Tx) ([]int64, error) {
-	ones, err := this.Query(tx).
-		ResultPk().
-		State(NodeRegionStateEnabled).
-		Desc("order").
-		AscPk().
-		FindAll()
-	if err != nil {
-		return nil, err
-	}
-
-	var regionIds = []int64{}
-	for _, one := range ones {
-		regionIds = append(regionIds, int64(one.(*NodeRegion).Id))
-	}
-	return regionIds, nil
-}
-
-// UpdateRegionOrders 排序
+// 排序
 func (this *NodeRegionDAO) UpdateRegionOrders(tx *dbs.Tx, regionIds []int64) error {
 	order := len(regionIds)
 	for _, regionId := range regionIds {
@@ -168,7 +148,7 @@ func (this *NodeRegionDAO) UpdateRegionOrders(tx *dbs.Tx, regionIds []int64) err
 	return nil
 }
 
-// UpdateRegionItemPrice 修改价格项价格
+// 修改价格项价格
 func (this *NodeRegionDAO) UpdateRegionItemPrice(tx *dbs.Tx, regionId int64, itemId int64, price float32) error {
 	one, err := this.Query(tx).
 		Pk(regionId).
@@ -182,8 +162,8 @@ func (this *NodeRegionDAO) UpdateRegionItemPrice(tx *dbs.Tx, regionId int64, ite
 	}
 	prices := one.(*NodeRegion).Prices
 	pricesMap := map[string]float32{}
-	if IsNotNull(prices) {
-		err = json.Unmarshal(prices, &pricesMap)
+	if len(prices) > 0 && prices != "null" {
+		err = json.Unmarshal([]byte(prices), &pricesMap)
 		if err != nil {
 			return err
 		}

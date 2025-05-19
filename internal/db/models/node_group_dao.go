@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -73,7 +73,7 @@ func (this *NodeGroupDAO) FindNodeGroupName(tx *dbs.Tx, id int64) (string, error
 
 // 创建分组
 func (this *NodeGroupDAO) CreateNodeGroup(tx *dbs.Tx, clusterId int64, name string) (int64, error) {
-	var op = NewNodeGroupOperator()
+	op := NewNodeGroupOperator()
 	op.ClusterId = clusterId
 	op.Name = name
 	op.State = NodeGroupStateEnabled
@@ -89,7 +89,7 @@ func (this *NodeGroupDAO) UpdateNodeGroup(tx *dbs.Tx, groupId int64, name string
 	if groupId <= 0 {
 		return errors.New("invalid groupId")
 	}
-	var op = NewNodeGroupOperator()
+	op := NewNodeGroupOperator()
 	op.Id = groupId
 	op.Name = name
 	err := this.Save(tx, op)

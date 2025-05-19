@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -73,7 +73,7 @@ func (this *MessageRecipientGroupDAO) FindMessageRecipientGroupName(tx *dbs.Tx, 
 
 // 创建分组
 func (this *MessageRecipientGroupDAO) CreateGroup(tx *dbs.Tx, name string) (int64, error) {
-	var op = NewMessageRecipientGroupOperator()
+	op := NewMessageRecipientGroupOperator()
 	op.Name = name
 	op.IsOn = true
 	op.State = MessageRecipientStateEnabled
@@ -85,7 +85,7 @@ func (this *MessageRecipientGroupDAO) UpdateGroup(tx *dbs.Tx, groupId int64, nam
 	if groupId <= 0 {
 		return errors.New("invalid groupId")
 	}
-	var op = NewMessageRecipientGroupOperator()
+	op := NewMessageRecipientGroupOperator()
 	op.Id = groupId
 	op.Name = name
 	op.IsOn = isOn

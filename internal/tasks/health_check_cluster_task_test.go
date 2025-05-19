@@ -1,16 +1,14 @@
-package tasks_test
+package tasks
 
 import (
-	"testing"
-
-	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
-func TestHealthCheckClusterTask_Loop(t *testing.T) {
+func TestHealthCheckClusterTask_loop(t *testing.T) {
 	dbs.NotifyReady()
-	var task = tasks.NewHealthCheckClusterTask(10, nil)
-	err := task.Loop()
+	task := NewHealthCheckClusterTask(10, nil)
+	err := task.loop(10)
 	if err != nil {
 		t.Fatal(err)
 	}

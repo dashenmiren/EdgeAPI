@@ -1,4 +1,4 @@
-package nameservers_test
+package nameservers
 
 import (
 	_ "github.com/go-sql-driver/mysql"

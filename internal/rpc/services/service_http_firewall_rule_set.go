@@ -3,21 +3,20 @@ package services
 import (
 	"context"
 	"encoding/json"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/firewallconfigs"
 )
 
-// HTTPFirewallRuleSetService 规则集相关服务
+// 规则集相关服务
 type HTTPFirewallRuleSetService struct {
 	BaseService
 }
 
-// CreateOrUpdateHTTPFirewallRuleSetFromConfig 根据配置创建规则集
+// 根据配置创建规则集
 func (this *HTTPFirewallRuleSetService) CreateOrUpdateHTTPFirewallRuleSetFromConfig(ctx context.Context, req *pb.CreateOrUpdateHTTPFirewallRuleSetFromConfigRequest) (*pb.CreateOrUpdateHTTPFirewallRuleSetFromConfigResponse, error) {
 	// 校验请求
-	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +34,7 @@ func (this *HTTPFirewallRuleSetService) CreateOrUpdateHTTPFirewallRuleSetFromCon
 		}
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
 	setId, err := models.SharedHTTPFirewallRuleSetDAO.CreateOrUpdateSetFromConfig(tx, setConfig)
 	if err != nil {
@@ -45,10 +44,10 @@ func (this *HTTPFirewallRuleSetService) CreateOrUpdateHTTPFirewallRuleSetFromCon
 	return &pb.CreateOrUpdateHTTPFirewallRuleSetFromConfigResponse{FirewallRuleSetId: setId}, nil
 }
 
-// UpdateHTTPFirewallRuleSetIsOn 修改是否开启
+// 修改是否开启
 func (this *HTTPFirewallRuleSetService) UpdateHTTPFirewallRuleSetIsOn(ctx context.Context, req *pb.UpdateHTTPFirewallRuleSetIsOnRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +59,7 @@ func (this *HTTPFirewallRuleSetService) UpdateHTTPFirewallRuleSetIsOn(ctx contex
 		}
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
 	err = models.SharedHTTPFirewallRuleSetDAO.UpdateRuleSetIsOn(tx, req.FirewallRuleSetId, req.IsOn)
 	if err != nil {
@@ -70,10 +69,10 @@ func (this *HTTPFirewallRuleSetService) UpdateHTTPFirewallRuleSetIsOn(ctx contex
 	return this.Success()
 }
 
-// FindEnabledHTTPFirewallRuleSetConfig 查找规则集配置
+// 查找规则集配置
 func (this *HTTPFirewallRuleSetService) FindEnabledHTTPFirewallRuleSetConfig(ctx context.Context, req *pb.FindEnabledHTTPFirewallRuleSetConfigRequest) (*pb.FindEnabledHTTPFirewallRuleSetConfigResponse, error) {
 	// 校验请求
-	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -85,9 +84,9 @@ func (this *HTTPFirewallRuleSetService) FindEnabledHTTPFirewallRuleSetConfig(ctx
 		}
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
-	config, err := models.SharedHTTPFirewallRuleSetDAO.ComposeFirewallRuleSet(tx, req.FirewallRuleSetId, false)
+	config, err := models.SharedHTTPFirewallRuleSetDAO.ComposeFirewallRuleSet(tx, req.FirewallRuleSetId)
 	if err != nil {
 		return nil, err
 	}
@@ -101,10 +100,10 @@ func (this *HTTPFirewallRuleSetService) FindEnabledHTTPFirewallRuleSetConfig(ctx
 	return &pb.FindEnabledHTTPFirewallRuleSetConfigResponse{FirewallRuleSetJSON: configJSON}, nil
 }
 
-// FindEnabledHTTPFirewallRuleSet 查找规则集
+// 查找规则集
 func (this *HTTPFirewallRuleSetService) FindEnabledHTTPFirewallRuleSet(ctx context.Context, req *pb.FindEnabledHTTPFirewallRuleSetRequest) (*pb.FindEnabledHTTPFirewallRuleSetResponse, error) {
 	// 校验请求
-	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +115,7 @@ func (this *HTTPFirewallRuleSetService) FindEnabledHTTPFirewallRuleSet(ctx conte
 		}
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
 	set, err := models.SharedHTTPFirewallRuleSetDAO.FindEnabledHTTPFirewallRuleSet(tx, req.FirewallRuleSetId)
 	if err != nil {
@@ -132,7 +131,7 @@ func (this *HTTPFirewallRuleSetService) FindEnabledHTTPFirewallRuleSet(ctx conte
 		FirewallRuleSet: &pb.HTTPFirewallRuleSet{
 			Id:          int64(set.Id),
 			Name:        set.Name,
-			IsOn:        set.IsOn,
+			IsOn:        set.IsOn == 1,
 			Description: set.Description,
 			Code:        set.Code,
 		},

@@ -1,20 +1,16 @@
-package models_test
+package models
 
 import (
-	"testing"
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestNodeTaskDAO_CreateNodeTask(t *testing.T) {
 	dbs.NotifyReady()
 
 	var tx *dbs.Tx
-	err := models.SharedNodeTaskDAO.CreateNodeTask(tx, nodeconfigs.NodeRoleNode, 1, 2, 0, 0, models.NodeTaskTypeConfigChanged)
+	err := SharedNodeTaskDAO.CreateNodeTask(tx, 1, 2, NodeTaskTypeConfigChanged)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +21,7 @@ func TestNodeTaskDAO_CreateClusterTask(t *testing.T) {
 	dbs.NotifyReady()
 
 	var tx *dbs.Tx
-	err := models.SharedNodeTaskDAO.CreateClusterTask(tx, nodeconfigs.NodeRoleNode, 1, 0, 0, models.NodeTaskTypeConfigChanged)
+	err := SharedNodeTaskDAO.CreateClusterTask(tx, 1, NodeTaskTypeConfigChanged)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,31 +32,9 @@ func TestNodeTaskDAO_ExtractClusterTask(t *testing.T) {
 	dbs.NotifyReady()
 
 	var tx *dbs.Tx
-	err := models.SharedNodeTaskDAO.ExtractNodeClusterTask(tx, 1, 0, 0, models.NodeTaskTypeConfigChanged)
+	err := SharedNodeTaskDAO.ExtractClusterTask(tx, 1, NodeTaskTypeConfigChanged)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log("ok")
-}
-
-func TestNodeTaskDAO_FindDoingNodeTasks(t *testing.T) {
-	var tx *dbs.Tx
-	var dao = models.NewNodeTaskDAO()
-	var before = time.Now()
-	defer func() {
-		t.Log(time.Since(before).Seconds()*1000, "ms")
-	}()
-	_, err := dao.FindDoingNodeTasks(tx, "node", 48, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestNodeTaskDAO_UpdateNodeTaskDone(t *testing.T) {
-	var tx *dbs.Tx
-	var dao = models.NewNodeTaskDAO()
-	err := dao.UpdateNodeTaskDone(tx, 1741, true, "")
-	if err != nil {
-		t.Fatal(err)
-	}
 }

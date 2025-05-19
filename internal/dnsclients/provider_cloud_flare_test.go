@@ -1,25 +1,16 @@
-// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+// Copyright 2021 Liuxiangchao iwind.liu@gmail.com. All rights reserved.
 
 package dnsclients
 
 import (
 	"encoding/json"
-	"testing"
-
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"
+	"testing"
 )
-
-func TestCloudFlareProvider_GetDomains(t *testing.T) {
-	provider, err := testCloudFlareProvider()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(provider.GetDomains())
-}
 
 func TestCloudFlareProvider_GetRecords(t *testing.T) {
 	provider, err := testCloudFlareProvider()
@@ -38,9 +29,9 @@ func TestCloudFlareProvider_GetRecords(t *testing.T) {
 		logs.PrintAsJSON(records, t)
 	}
 
-	t.Log("===example.com===")
+	t.Log("===teaos.cn===")
 	{
-		records, err := provider.GetRecords("example.com")
+		records, err := provider.GetRecords("teaos.cn")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,21 +78,6 @@ func TestCloudFlareProvider_QueryRecord(t *testing.T) {
 	}
 }
 
-func TestCloudFlareProvider_QueryRecords(t *testing.T) {
-	provider, err := testCloudFlareProvider()
-	if err != nil {
-		t.Fatal(err)
-	}
-	{
-		t.Log("== www.meloy.cn/A ==")
-		records, err := provider.QueryRecords("meloy.cn", "www", dnstypes.RecordTypeA)
-		if err != nil {
-			t.Fatal(err)
-		}
-		logs.PrintAsJSON(records, t)
-	}
-}
-
 func TestCloudFlareProvider_AddRecord(t *testing.T) {
 	provider, err := testCloudFlareProvider()
 	if err != nil {
@@ -114,7 +90,6 @@ func TestCloudFlareProvider_AddRecord(t *testing.T) {
 			Type:  dnstypes.RecordTypeA,
 			Value: "182.92.212.46",
 			Route: "",
-			TTL:   300,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -172,19 +147,19 @@ func testCloudFlareProvider() (ProviderInterface, error) {
 	if err != nil {
 		return nil, err
 	}
-	one, err := db.FindOne("SELECT * FROM edgeDNSProviders WHERE type='cloudFlare' AND state=1 ORDER BY id DESC")
+	one, err := db.FindOne("SELECT * FROM edgeDNSProviders WHERE type='cloudFlare' ORDER BY id DESC")
 	if err != nil {
 		return nil, err
 	}
 	if one == nil {
 		return nil, errors.New("can not find providers with type 'cloudFlare'")
 	}
-	var apiParams = maps.Map{}
+	apiParams := maps.Map{}
 	err = json.Unmarshal([]byte(one.GetString("apiParams")), &apiParams)
 	if err != nil {
 		return nil, err
 	}
-	var provider = &CloudFlareProvider{}
+	provider := &CloudFlareProvider{}
 	err = provider.Auth(apiParams)
 	if err != nil {
 		return nil, err

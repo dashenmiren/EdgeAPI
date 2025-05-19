@@ -1,9 +1,8 @@
 package models
 
 import (
-	"testing"
-
 	_ "github.com/go-sql-driver/mysql"
+	"testing"
 )
 
 func TestSysEvent_DecodeEvent(t *testing.T) {

@@ -2,20 +2,19 @@ package services
 
 import (
 	"context"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models/stats"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
 )
 
-// ServerClientBrowserMonthlyStatService 操作系统统计
+// 操作系统统计
 type ServerClientBrowserMonthlyStatService struct {
 	BaseService
 }
 
-// FindTopServerClientBrowserMonthlyStats 查找前N个操作系统
+// 查找前N个操作系统
 func (this *ServerClientBrowserMonthlyStatService) FindTopServerClientBrowserMonthlyStats(ctx context.Context, req *pb.FindTopServerClientBrowserMonthlyStatsRequest) (*pb.FindTopServerClientBrowserMonthlyStatsResponse, error) {
-	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -32,13 +31,13 @@ func (this *ServerClientBrowserMonthlyStatService) FindTopServerClientBrowserMon
 	if err != nil {
 		return nil, err
 	}
-	var pbStats = []*pb.FindTopServerClientBrowserMonthlyStatsResponse_Stat{}
+	pbStats := []*pb.FindTopServerClientBrowserMonthlyStatsResponse_Stat{}
 	for _, stat := range statList {
 		pbStat := &pb.FindTopServerClientBrowserMonthlyStatsResponse_Stat{
 			Count:   int64(stat.Count),
 			Version: stat.Version,
 		}
-		browser, err := models.SharedFormalClientBrowserDAO.FindEnabledFormalClientBrowser(tx, int64(stat.BrowserId))
+		browser, err := models.SharedClientBrowserDAO.FindEnabledClientBrowser(tx, int64(stat.BrowserId))
 		if err != nil {
 			return nil, err
 		}
@@ -49,6 +48,7 @@ func (this *ServerClientBrowserMonthlyStatService) FindTopServerClientBrowserMon
 			Id:   int64(browser.Id),
 			Name: browser.Name,
 		}
+
 		pbStats = append(pbStats, pbStat)
 	}
 	return &pb.FindTopServerClientBrowserMonthlyStatsResponse{Stats: pbStats}, nil

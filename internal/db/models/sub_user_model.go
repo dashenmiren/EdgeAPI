@@ -1,10 +1,10 @@
 package models
 
-// SubUser 子用户
+// 子用户
 type SubUser struct {
 	Id       uint32 `field:"id"`       // ID
 	UserId   uint32 `field:"userId"`   // 所属主用户ID
-	IsOn     bool   `field:"isOn"`     // 是否启用
+	IsOn     uint8  `field:"isOn"`     // 是否启用
 	Name     string `field:"name"`     // 名称
 	Username string `field:"username"` // 用户名
 	Password string `field:"password"` // 密码

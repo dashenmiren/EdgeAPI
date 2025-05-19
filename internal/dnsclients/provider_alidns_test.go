@@ -2,23 +2,14 @@ package dnsclients
 
 import (
 	"encoding/json"
-	"testing"
-
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"
+	"testing"
 )
-
-func TestAliDNSProvider_GetDomains(t *testing.T) {
-	provider, err := testAliDNSProvider()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(provider.GetDomains())
-}
 
 func TestAliDNSProvider_GetRecords(t *testing.T) {
 	provider, err := testAliDNSProvider()
@@ -31,41 +22,6 @@ func TestAliDNSProvider_GetRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	logs.PrintAsJSON(records, t)
-}
-
-func TestAliDNSProvider_QueryRecord(t *testing.T) {
-	provider, err := testAliDNSProvider()
-	if err != nil {
-		t.Fatal(err)
-	}
-	{
-		record, err := provider.QueryRecord("meloy.cn", "www", "A")
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Log(record)
-	}
-	{
-		record, err := provider.QueryRecord("meloy.cn", "www1", "A")
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Log(record)
-	}
-}
-
-func TestAliDNSProvider_QueryRecords(t *testing.T) {
-	provider, err := testAliDNSProvider()
-	if err != nil {
-		t.Fatal(err)
-	}
-	{
-		records, err := provider.QueryRecords("meloy.cn", "www", "A")
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("%+v", records)
-	}
 }
 
 func TestAliDNSProvider_DeleteRecord(t *testing.T) {
@@ -102,18 +58,17 @@ func TestAliDNSProvider_AddRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var record = &dnstypes.Record{
+	err = provider.AddRecord("meloy.cn", &dnstypes.Record{
 		Id:    "",
 		Name:  "test",
 		Type:  dnstypes.RecordTypeA,
 		Value: "192.168.1.100",
-		Route: "aliyun_r_cn-beijing",
-	}
-	err = provider.AddRecord("meloy.cn", record)
+		Route: "unicom",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("ok, record id:", record.Id)
+	t.Log("ok")
 }
 
 func TestAliDNSProvider_UpdateRecord(t *testing.T) {
@@ -136,13 +91,11 @@ func TestAliDNSProvider_UpdateRecord(t *testing.T) {
 }
 
 func testAliDNSProvider() (ProviderInterface, error) {
-	dbs.NotifyReady()
-
 	db, err := dbs.Default()
 	if err != nil {
 		return nil, err
 	}
-	one, err := db.FindOne("SELECT * FROM edgeDNSProviders WHERE type='alidns' AND state=1 ORDER BY id DESC")
+	one, err := db.FindOne("SELECT * FROM edgeDNSProviders WHERE type='alidns' ORDER BY id DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +104,7 @@ func testAliDNSProvider() (ProviderInterface, error) {
 	if err != nil {
 		return nil, err
 	}
-	provider := &AliDNSProvider{
-		ProviderId: one.GetInt64("id"),
-	}
+	provider := &AliDNSProvider{}
 	err = provider.Auth(apiParams)
 	if err != nil {
 		return nil, err

@@ -2,11 +2,10 @@ package services
 
 import (
 	"context"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/db/models/regions"
-	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models/regions"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models/stats"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
 )
 
 // 省份月份统计
@@ -16,7 +15,7 @@ type ServerRegionProvinceMonthlyStatService struct {
 
 // 查找前N个省份
 func (this *ServerRegionProvinceMonthlyStatService) FindTopServerRegionProvinceMonthlyStats(ctx context.Context, req *pb.FindTopServerRegionProvinceMonthlyStatsRequest) (*pb.FindTopServerRegionProvinceMonthlyStatsResponse, error) {
-	_, userId, err := this.ValidateAdminAndUser(ctx, true)
+	_, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +32,7 @@ func (this *ServerRegionProvinceMonthlyStatService) FindTopServerRegionProvinceM
 	if err != nil {
 		return nil, err
 	}
-	var pbStats = []*pb.FindTopServerRegionProvinceMonthlyStatsResponse_Stat{}
+	pbStats := []*pb.FindTopServerRegionProvinceMonthlyStatsResponse_Stat{}
 	for _, stat := range statList {
 		pbStat := &pb.FindTopServerRegionProvinceMonthlyStatsResponse_Stat{
 			Count: int64(stat.Count),
@@ -53,12 +52,12 @@ func (this *ServerRegionProvinceMonthlyStatService) FindTopServerRegionProvinceM
 			continue
 		}
 		pbStat.RegionCountry = &pb.RegionCountry{
-			Id:   int64(country.ValueId),
-			Name: country.DisplayName(),
+			Id:   int64(country.Id),
+			Name: country.Name,
 		}
 		pbStat.RegionProvince = &pb.RegionProvince{
-			Id:   int64(province.ValueId),
-			Name: province.DisplayName(),
+			Id:   int64(province.Id),
+			Name: province.Name,
 		}
 		pbStats = append(pbStats, pbStat)
 	}

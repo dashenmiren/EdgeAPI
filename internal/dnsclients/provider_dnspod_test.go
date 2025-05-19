@@ -1,36 +1,20 @@
-package dnsclients_test
+package dnsclients
 
 import (
 	"encoding/json"
-	"testing"
-
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"
+	"testing"
 )
 
-const DNSPodTestDomain = "cdn.foyeseo.com"
-
-func TestDNSPodProvider_GetDomains(t *testing.T) {
-	provider, _, err := testDNSPodProvider()
-	if err != nil {
-		t.Fatal(err)
-	}
-	domains, err := provider.GetDomains()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(domains)
-}
-
 func TestDNSPodProvider_GetRoutes(t *testing.T) {
-	provider, _, err := testDNSPodProvider()
+	provider, err := testDNSPodProvider()
 	if err != nil {
 		t.Fatal(err)
 	}
-	routes, err := provider.GetRoutes(DNSPodTestDomain)
+	routes, err := provider.GetRoutes("yun4s.cn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,11 +22,11 @@ func TestDNSPodProvider_GetRoutes(t *testing.T) {
 }
 
 func TestDNSPodProvider_GetRecords(t *testing.T) {
-	provider, _, err := testDNSPodProvider()
+	provider, err := testDNSPodProvider()
 	if err != nil {
 		t.Fatal(err)
 	}
-	records, err := provider.GetRecords(DNSPodTestDomain)
+	records, err := provider.GetRecords("yun4s.cn")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,88 +36,36 @@ func TestDNSPodProvider_GetRecords(t *testing.T) {
 }
 
 func TestDNSPodProvider_AddRecord(t *testing.T) {
-	provider, isInternational, err := testDNSPodProvider()
+	provider, err := testDNSPodProvider()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var route = "联通"
-	if isInternational {
-		route = "Default"
-	}
-
-	var record = &dnstypes.Record{
+	err = provider.AddRecord("yun4s.cn", &dnstypes.Record{
 		Type:  dnstypes.RecordTypeCNAME,
 		Name:  "hello-forward",
-		Value: "hello." + DNSPodTestDomain,
-		Route: route,
-		TTL:   600,
-	}
-	err = provider.AddRecord(DNSPodTestDomain, record)
+		Value: "hello.yun4s.cn",
+		Route: "联通",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("ok, record id:", record.Id)
-}
-
-func TestDNSPodProvider_QueryRecord(t *testing.T) {
-	provider, _, err := testDNSPodProvider()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	{
-		record, err := provider.QueryRecord(DNSPodTestDomain, "hello-forward", dnstypes.RecordTypeCNAME)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Log(record)
-	}
-
-	{
-		record, err := provider.QueryRecord(DNSPodTestDomain, "hello-forward2", dnstypes.RecordTypeCNAME)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Log(record)
-	}
-}
-
-func TestDNSPodProvider_QueryRecords(t *testing.T) {
-	provider, _, err := testDNSPodProvider()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	{
-		records, err := provider.QueryRecords(DNSPodTestDomain, "hello-forward", dnstypes.RecordTypeCNAME)
-		if err != nil {
-			t.Fatal(err)
-		}
-		logs.PrintAsJSON(records, t)
-	}
+	t.Log("ok")
 }
 
 func TestDNSPodProvider_UpdateRecord(t *testing.T) {
-	provider, isInternational, err := testDNSPodProvider()
+	provider, err := testDNSPodProvider()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var route = "联通"
-	var id = "1224507933"
-	if isInternational {
-		route = "Default"
-		id = "28507333"
-	}
-
-	err = provider.UpdateRecord(DNSPodTestDomain, &dnstypes.Record{
-		Id: id,
+	err = provider.UpdateRecord("yun4s.cn", &dnstypes.Record{
+		Id: "697036856",
 	}, &dnstypes.Record{
 		Type:  dnstypes.RecordTypeA,
 		Name:  "hello",
 		Value: "192.168.1.102",
-		Route: route,
+		Route: "联通",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -142,17 +74,13 @@ func TestDNSPodProvider_UpdateRecord(t *testing.T) {
 }
 
 func TestDNSPodProvider_DeleteRecord(t *testing.T) {
-	provider, isInternational, err := testDNSPodProvider()
+	provider, err := testDNSPodProvider()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var id = "1224507933"
-	if isInternational {
-		id = "28507333"
-	}
-	err = provider.DeleteRecord(DNSPodTestDomain, &dnstypes.Record{
-		Id: id,
+	err = provider.DeleteRecord("yun4s.cn", &dnstypes.Record{
+		Id: "697040986",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -160,28 +88,24 @@ func TestDNSPodProvider_DeleteRecord(t *testing.T) {
 	t.Log("ok")
 }
 
-func testDNSPodProvider() (provider dnsclients.ProviderInterface, isInternational bool, err error) {
-	dbs.NotifyReady()
-
+func testDNSPodProvider() (ProviderInterface, error) {
 	db, err := dbs.Default()
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	one, err := db.FindOne("SELECT * FROM edgeDNSProviders WHERE type='dnspod' AND id='14' ORDER BY id DESC")
+	one, err := db.FindOne("SELECT * FROM edgeDNSProviders WHERE type='dnspod' ORDER BY id DESC")
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	var apiParams = maps.Map{}
+	apiParams := maps.Map{}
 	err = json.Unmarshal([]byte(one.GetString("apiParams")), &apiParams)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	provider = &dnsclients.DNSPodProvider{
-		ProviderId: one.GetInt64("id"),
-	}
+	provider := &DNSPodProvider{}
 	err = provider.Auth(apiParams)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	return provider, apiParams.GetString("region") == "international", nil
+	return provider, nil
 }

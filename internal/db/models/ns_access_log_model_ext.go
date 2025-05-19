@@ -2,13 +2,13 @@ package models
 
 import (
 	"encoding/json"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
 )
 
 // ToPB 转换成PB对象
 func (this *NSAccessLog) ToPB() (*pb.NSAccessLog, error) {
 	p := &pb.NSAccessLog{}
-	err := json.Unmarshal(this.Content, p)
+	err := json.Unmarshal([]byte(this.Content), p)
 	if err != nil {
 		return nil, err
 	}

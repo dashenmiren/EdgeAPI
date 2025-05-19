@@ -6,12 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
-	mrand "math/rand"
 )
 
 const (
@@ -40,7 +39,7 @@ func init() {
 	})
 }
 
-// EnableACMEUser 启用条目
+// 启用条目
 func (this *ACMEUserDAO) EnableACMEUser(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -49,7 +48,7 @@ func (this *ACMEUserDAO) EnableACMEUser(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// DisableACMEUser 禁用条目
+// 禁用条目
 func (this *ACMEUserDAO) DisableACMEUser(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -70,8 +69,8 @@ func (this *ACMEUserDAO) FindEnabledACMEUser(tx *dbs.Tx, id int64) (*ACMEUser, e
 	return result.(*ACMEUser), err
 }
 
-// CreateACMEUser 创建用户
-func (this *ACMEUserDAO) CreateACMEUser(tx *dbs.Tx, adminId int64, userId int64, providerCode string, accountId int64, email string, description string) (int64, error) {
+// 创建用户
+func (this *ACMEUserDAO) CreateACMEUser(tx *dbs.Tx, adminId int64, userId int64, email string, description string) (int64, error) {
 	// 生成私钥
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -84,11 +83,9 @@ func (this *ACMEUserDAO) CreateACMEUser(tx *dbs.Tx, adminId int64, userId int64,
 	}
 	privateKeyText := base64.StdEncoding.EncodeToString(privateKeyData)
 
-	var op = NewACMEUserOperator()
+	op := NewACMEUserOperator()
 	op.AdminId = adminId
 	op.UserId = userId
-	op.ProviderCode = providerCode
-	op.AccountId = accountId
 	op.Email = email
 	op.Description = description
 	op.PrivateKey = privateKeyText
@@ -100,43 +97,38 @@ func (this *ACMEUserDAO) CreateACMEUser(tx *dbs.Tx, adminId int64, userId int64,
 	return types.Int64(op.Id), nil
 }
 
-// UpdateACMEUser 修改用户信息
+// 修改用户信息
 func (this *ACMEUserDAO) UpdateACMEUser(tx *dbs.Tx, acmeUserId int64, description string) error {
 	if acmeUserId <= 0 {
 		return errors.New("invalid acmeUserId")
 	}
-	var op = NewACMEUserOperator()
+	op := NewACMEUserOperator()
 	op.Id = acmeUserId
 	op.Description = description
 	err := this.Save(tx, op)
 	return err
 }
 
-// UpdateACMEUserRegistration 修改用户ACME注册信息
+// 修改用户ACME注册信息
 func (this *ACMEUserDAO) UpdateACMEUserRegistration(tx *dbs.Tx, acmeUserId int64, registrationJSON []byte) error {
 	if acmeUserId <= 0 {
 		return errors.New("invalid acmeUserId")
 	}
-	var op = NewACMEUserOperator()
+	op := NewACMEUserOperator()
 	op.Id = acmeUserId
 	op.Registration = registrationJSON
 	err := this.Save(tx, op)
 	return err
 }
 
-// CountACMEUsersWithAdminId 计算用户数量
-func (this *ACMEUserDAO) CountACMEUsersWithAdminId(tx *dbs.Tx, adminId int64, userId int64, accountId int64) (int64, error) {
+// 计算用户数量
+func (this *ACMEUserDAO) CountACMEUsersWithAdminId(tx *dbs.Tx, adminId int64, userId int64) (int64, error) {
 	query := this.Query(tx)
 	if adminId > 0 {
 		query.Attr("adminId", adminId)
 	}
 	if userId > 0 {
 		query.Attr("userId", userId)
-	} else {
-		query.Attr("userId", 0)
-	}
-	if accountId > 0 {
-		query.Attr("accountId", accountId)
 	}
 
 	return query.
@@ -144,7 +136,7 @@ func (this *ACMEUserDAO) CountACMEUsersWithAdminId(tx *dbs.Tx, adminId int64, us
 		Count()
 }
 
-// ListACMEUsers 列出当前管理员的用户
+// 列出当前管理员的用户
 func (this *ACMEUserDAO) ListACMEUsers(tx *dbs.Tx, adminId int64, userId int64, offset int64, size int64) (result []*ACMEUser, err error) {
 	query := this.Query(tx)
 	if adminId > 0 {
@@ -152,8 +144,6 @@ func (this *ACMEUserDAO) ListACMEUsers(tx *dbs.Tx, adminId int64, userId int64, 
 	}
 	if userId > 0 {
 		query.Attr("userId", userId)
-	} else {
-		query.Attr("userId", 0)
 	}
 
 	_, err = query.
@@ -166,8 +156,8 @@ func (this *ACMEUserDAO) ListACMEUsers(tx *dbs.Tx, adminId int64, userId int64, 
 	return
 }
 
-// FindAllACMEUsers 查找所有用户
-func (this *ACMEUserDAO) FindAllACMEUsers(tx *dbs.Tx, adminId int64, userId int64, providerCode string) (result []*ACMEUser, err error) {
+// 查找所有用户
+func (this *ACMEUserDAO) FindAllACMEUsers(tx *dbs.Tx, adminId int64, userId int64) (result []*ACMEUser, err error) {
 	// 防止没有传入条件导致返回的数据过多
 	if adminId <= 0 && userId <= 0 {
 		return nil, errors.New("'adminId' or 'userId' should not be empty")
@@ -180,9 +170,6 @@ func (this *ACMEUserDAO) FindAllACMEUsers(tx *dbs.Tx, adminId int64, userId int6
 	if userId > 0 {
 		query.Attr("userId", userId)
 	}
-	if len(providerCode) > 0 {
-		query.Attr("providerCode", providerCode)
-	}
 	_, err = query.
 		State(ACMEUserStateEnabled).
 		Slice(&result).
@@ -191,7 +178,7 @@ func (this *ACMEUserDAO) FindAllACMEUsers(tx *dbs.Tx, adminId int64, userId int6
 	return
 }
 
-// CheckACMEUser 检查用户权限
+// 检查用户权限
 func (this *ACMEUserDAO) CheckACMEUser(tx *dbs.Tx, acmeUserId int64, adminId int64, userId int64) (bool, error) {
 	if acmeUserId <= 0 {
 		return false, nil
@@ -209,18 +196,4 @@ func (this *ACMEUserDAO) CheckACMEUser(tx *dbs.Tx, acmeUserId int64, adminId int
 	return query.
 		State(ACMEUserStateEnabled).
 		Exist()
-}
-func (this *ACMEUserDAO) FindRandomACMEUserWithSameProvider(tx *dbs.Tx, providerCode string) (*ACMEUser, error) {
-	results, err := this.Query(tx).
-		Attr("providerCode", providerCode).
-		Attr("userId", 0).
-		FindAll()
-	if results == nil {
-		return nil, err
-	}
-	if len(results) == 0 {
-		return nil, errors.New("no acme user found")
-	}
-	idx := mrand.Intn(len(results))
-	return results[idx].(*ACMEUser), err
 }

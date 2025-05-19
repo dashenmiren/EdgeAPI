@@ -1,50 +1,40 @@
 package tasks
 
 import (
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/goman"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
 	"github.com/iwind/TeaGo/dbs"
+	"github.com/iwind/TeaGo/logs"
+	"time"
 )
 
 func init() {
-	dbs.OnReadyDone(func() {
-		goman.New(func() {
-			NewNodeLogCleanerTask(24 * time.Hour).Start()
-		})
+	dbs.OnReady(func() {
+		go NewNodeLogCleanerTask().Start()
 	})
 }
 
-// NodeLogCleanerTask 清理节点日志的任务
+// 清理节点日志的工具
 type NodeLogCleanerTask struct {
-	BaseTask
-
-	ticker *time.Ticker
+	duration time.Duration
 }
 
-func NewNodeLogCleanerTask(duration time.Duration) *NodeLogCleanerTask {
+func NewNodeLogCleanerTask() *NodeLogCleanerTask {
 	return &NodeLogCleanerTask{
-		ticker: time.NewTicker(duration),
+		duration: 24 * time.Hour,
 	}
 }
 
 func (this *NodeLogCleanerTask) Start() {
-	for range this.ticker.C {
-		err := this.Loop()
+	ticker := time.NewTicker(this.duration)
+	for range ticker.C {
+		err := this.loop()
 		if err != nil {
-			this.logErr("NodeLogCleanerTask", err.Error())
+			logs.Println("[TASK]" + err.Error())
 		}
 	}
 }
 
-func (this *NodeLogCleanerTask) Loop() error {
-	// 删除 N天 以前的info日志
-	err := models.SharedNodeLogDAO.DeleteExpiredLogsWithLevel(nil, "info", 3)
-	if err != nil {
-		return err
-	}
-
-	// TODO 7天这个数值改成可以设置
-	return models.SharedNodeLogDAO.DeleteExpiredLogs(nil, 7)
+func (this *NodeLogCleanerTask) loop() error {
+	// TODO 30天这个数值改成可以设置
+	return models.SharedNodeLogDAO.DeleteExpiredLogs(nil, 30)
 }

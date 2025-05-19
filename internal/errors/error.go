@@ -2,11 +2,10 @@ package errors
 
 import (
 	"errors"
+	"github.com/iwind/TeaGo/Tea"
 	"path/filepath"
 	"runtime"
 	"strconv"
-
-	"github.com/iwind/TeaGo/Tea"
 )
 
 type errorObj struct {
@@ -30,12 +29,8 @@ func (this *errorObj) Error() string {
 	return s
 }
 
-// New 新错误
+// 新错误
 func New(errText string) error {
-	if !Tea.IsTesting() {
-		return errors.New(errText)
-	}
-
 	ptr, file, line, ok := runtime.Caller(1)
 	funcName := ""
 	if ok {
@@ -50,7 +45,7 @@ func New(errText string) error {
 	}
 }
 
-// Wrap 包装已有错误
+// 包装已有错误
 func Wrap(err error) error {
 	if err == nil {
 		return nil

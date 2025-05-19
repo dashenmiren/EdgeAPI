@@ -2,24 +2,17 @@ package models
 
 import (
 	"encoding/json"
-	"sort"
+	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
 	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
-	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ddosconfigs"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
-	timeutil "github.com/iwind/TeaGo/utils/time"
 )
 
-// DecodeInstallStatus 安装状态
+// 安装状态
 func (this *Node) DecodeInstallStatus() (*NodeInstallStatus, error) {
-	if len(this.InstallStatus) == 0 {
+	if len(this.InstallStatus) == 0 || this.InstallStatus == "null" {
 		return NewNodeInstallStatus(), nil
 	}
-	var status = &NodeInstallStatus{}
-	err := json.Unmarshal(this.InstallStatus, status)
+	status := &NodeInstallStatus{}
+	err := json.Unmarshal([]byte(this.InstallStatus), status)
 	if err != nil {
 		return NewNodeInstallStatus(), err
 	}
@@ -34,189 +27,54 @@ func (this *Node) DecodeInstallStatus() (*NodeInstallStatus, error) {
 	return status, nil
 }
 
-// DecodeStatus 节点状态
+// 节点状态
 func (this *Node) DecodeStatus() (*nodeconfigs.NodeStatus, error) {
-	if len(this.Status) == 0 {
+	if len(this.Status) == 0 || this.Status == "null" {
 		return nil, nil
 	}
-	var status = &nodeconfigs.NodeStatus{}
-	err := json.Unmarshal(this.Status, status)
+	status := &nodeconfigs.NodeStatus{}
+	err := json.Unmarshal([]byte(this.Status), status)
 	if err != nil {
 		return nil, err
 	}
 	return status, nil
 }
 
-// DNSRouteCodes 所有的DNS线路
-func (this *Node) DNSRouteCodes() map[int64][]string {
-	var routes = map[int64][]string{} // domainId => routes
-	if len(this.DnsRoutes) == 0 {
-		return routes
+// 所有的DNS线路
+func (this *Node) DNSRouteCodes() (map[int64][]string, error) {
+	routes := map[int64][]string{} // domainId => routes
+	if len(this.DnsRoutes) == 0 || this.DnsRoutes == "null" {
+		return routes, nil
 	}
-	err := json.Unmarshal(this.DnsRoutes, &routes)
+	err := json.Unmarshal([]byte(this.DnsRoutes), &routes)
 	if err != nil {
-		// 忽略错误
-		return routes
+		return map[int64][]string{}, err
 	}
-	return routes
+	return routes, nil
 }
 
-// DNSRouteCodesForDomainId DNS线路
+// DNS线路
 func (this *Node) DNSRouteCodesForDomainId(dnsDomainId int64) ([]string, error) {
-	var routes = map[int64][]string{} // domainId => routes
-	if len(this.DnsRoutes) == 0 {
+	routes := map[int64][]string{} // domainId => routes
+	if len(this.DnsRoutes) == 0 || this.DnsRoutes == "null" {
 		return nil, nil
 	}
-	err := json.Unmarshal(this.DnsRoutes, &routes)
+	err := json.Unmarshal([]byte(this.DnsRoutes), &routes)
 	if err != nil {
 		return nil, err
 	}
-	var domainRoutes = routes[dnsDomainId]
-	if len(domainRoutes) > 0 {
-		sort.Strings(domainRoutes)
-	}
-
+	domainRoutes, _ := routes[dnsDomainId]
 	return domainRoutes, nil
 }
 
-// DecodeConnectedAPINodeIds 连接的API
+// 连接的API
 func (this *Node) DecodeConnectedAPINodeIds() ([]int64, error) {
-	var apiNodeIds = []int64{}
+	apiNodeIds := []int64{}
 	if IsNotNull(this.ConnectedAPINodes) {
-		err := json.Unmarshal(this.ConnectedAPINodes, &apiNodeIds)
+		err := json.Unmarshal([]byte(this.ConnectedAPINodes), &apiNodeIds)
 		if err != nil {
 			return nil, err
 		}
 	}
 	return apiNodeIds, nil
-}
-
-// DecodeSecondaryClusterIds 从集群IDs
-func (this *Node) DecodeSecondaryClusterIds() []int64 {
-	if len(this.SecondaryClusterIds) == 0 {
-		return []int64{}
-	}
-	var result = []int64{}
-	// 不需要处理错误
-	_ = json.Unmarshal(this.SecondaryClusterIds, &result)
-	return result
-}
-
-// AllClusterIds 获取所属集群IDs
-func (this *Node) AllClusterIds() []int64 {
-	var result = []int64{}
-
-	if this.ClusterId > 0 {
-		result = append(result, int64(this.ClusterId))
-	}
-
-	result = append(result, this.DecodeSecondaryClusterIds()...)
-
-	return result
-}
-
-// DecodeDDoSProtection 解析DDoS Protection设置
-func (this *Node) DecodeDDoSProtection() *ddosconfigs.ProtectionConfig {
-	if IsNull(this.DdosProtection) {
-		return nil
-	}
-
-	var result = &ddosconfigs.ProtectionConfig{}
-	err := json.Unmarshal(this.DdosProtection, &result)
-	if err != nil {
-		// ignore err
-	}
-	return result
-}
-
-// HasDDoSProtection 检查是否有DDOS设置
-func (this *Node) HasDDoSProtection() bool {
-	var config = this.DecodeDDoSProtection()
-	if config != nil {
-		return !config.IsPriorEmpty()
-	}
-	return false
-}
-
-// DecodeMaxCacheDiskCapacity 解析硬盘容量
-func (this *Node) DecodeMaxCacheDiskCapacity() *shared.SizeCapacity {
-	if this.MaxCacheDiskCapacity.IsNull() {
-		return nil
-	}
-
-	// ignore error
-	capacity, _ := shared.DecodeSizeCapacityJSON(this.MaxCacheDiskCapacity)
-	return capacity
-}
-
-// DecodeMaxCacheMemoryCapacity 解析内存容量
-func (this *Node) DecodeMaxCacheMemoryCapacity() *shared.SizeCapacity {
-	if this.MaxCacheMemoryCapacity.IsNull() {
-		return nil
-	}
-
-	// ignore error
-	capacity, _ := shared.DecodeSizeCapacityJSON(this.MaxCacheMemoryCapacity)
-	return capacity
-}
-
-// DecodeDNSResolver 解析DNS解析主机配置
-func (this *Node) DecodeDNSResolver() *nodeconfigs.DNSResolverConfig {
-	if this.DnsResolver.IsNull() {
-		return nil
-	}
-
-	var resolverConfig = nodeconfigs.DefaultDNSResolverConfig()
-	err := json.Unmarshal(this.DnsResolver, resolverConfig)
-	if err != nil {
-		// ignore error
-	}
-	return resolverConfig
-}
-
-// DecodeLnAddrs 解析Ln地址
-func (this *Node) DecodeLnAddrs() []string {
-	if IsNull(this.LnAddrs) {
-		return nil
-	}
-
-	var result = []string{}
-	err := json.Unmarshal(this.LnAddrs, &result)
-	if err != nil {
-		// ignore error
-	}
-	return result
-}
-
-// DecodeCacheDiskSubDirs 解析缓存目录
-func (this *Node) DecodeCacheDiskSubDirs() []*serverconfigs.CacheDir {
-	if IsNull(this.CacheDiskSubDirs) {
-		return nil
-	}
-
-	var result = []*serverconfigs.CacheDir{}
-	err := json.Unmarshal(this.CacheDiskSubDirs, &result)
-	if err != nil {
-		remotelogs.Error("Node.DecodeCacheDiskSubDirs", err.Error())
-	}
-	return result
-}
-
-// DecodeAPINodeAddrs 解析API节点地址
-func (this *Node) DecodeAPINodeAddrs() []*serverconfigs.NetworkAddressConfig {
-	var result = []*serverconfigs.NetworkAddressConfig{}
-	if IsNull(this.ApiNodeAddrs) {
-		return result
-	}
-
-	err := json.Unmarshal(this.ApiNodeAddrs, &result)
-	if err != nil {
-		remotelogs.Error("Node.DecodeAPINodeAddrs", err.Error())
-	}
-	return result
-}
-
-// CheckIsOffline 检查是否已经离线
-func (this *Node) CheckIsOffline() bool {
-	return len(this.OfflineDay) > 0 && this.OfflineDay < timeutil.Format("Ymd")
 }

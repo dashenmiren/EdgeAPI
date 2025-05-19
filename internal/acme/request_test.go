@@ -2,14 +2,13 @@ package acme
 
 import (
 	"encoding/json"
-	"testing"
-
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
+	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients"
 	"github.com/go-acme/lego/v4/registration"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
+	"testing"
 )
 
 func TestRequest_Run_DNS(t *testing.T) {
@@ -18,7 +17,7 @@ func TestRequest_Run_DNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	user := NewUser("example@qq.com", privateKey, func(resource *registration.Resource) error {
+	user := NewUser("19644627@qq.com", privateKey, func(resource *registration.Resource) error {
 		resourceJSON, err := json.Marshal(resource)
 		if err != nil {
 			return err
@@ -27,7 +26,7 @@ func TestRequest_Run_DNS(t *testing.T) {
 		return nil
 	})
 
-	regResource := []byte(`{"body":{"status":"valid","contact":["mailto:example@qq.com"]},"uri":"https://acme-v02.api.letsencrypt.org/acme/acct/103672877"}`)
+	regResource := []byte(`{"body":{"status":"valid","contact":["mailto:19644627@qq.com"]},"uri":"https://acme-v02.api.letsencrypt.org/acme/acct/103672877"}`)
 	err = user.SetRegistration(regResource)
 	if err != nil {
 		t.Fatal(err)
@@ -40,10 +39,10 @@ func TestRequest_Run_DNS(t *testing.T) {
 
 	req := NewRequest(&Task{
 		User:        user,
-		AuthType:    AuthTypeDNS,
+		Type:        TaskTypeDNS,
 		DNSProvider: dnsProvider,
 		DNSDomain:   "yun4s.cn",
-		Domains:     []string{"www.yun4s.cn"},
+		Domains:     []string{"yun4s.cn"},
 	})
 	certData, keyData, err := req.Run()
 	if err != nil {
@@ -59,7 +58,7 @@ func TestRequest_Run_HTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	user := NewUser("example@qq.com", privateKey, func(resource *registration.Resource) error {
+	user := NewUser("19644627@qq.com", privateKey, func(resource *registration.Resource) error {
 		resourceJSON, err := json.Marshal(resource)
 		if err != nil {
 			return err
@@ -68,16 +67,16 @@ func TestRequest_Run_HTTP(t *testing.T) {
 		return nil
 	})
 
-	regResource := []byte(`{"body":{"status":"valid","contact":["mailto:example@qq.com"]},"uri":"https://acme-v02.api.letsencrypt.org/acme/acct/103672877"}`)
+	regResource := []byte(`{"body":{"status":"valid","contact":["mailto:19644627@qq.com"]},"uri":"https://acme-v02.api.letsencrypt.org/acme/acct/103672877"}`)
 	err = user.SetRegistration(regResource)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	req := NewRequest(&Task{
-		User:     user,
-		AuthType: AuthTypeHTTP,
-		Domains:  []string{"example.com", "www.example.com", "meloy.cn"},
+		User:    user,
+		Type:    TaskTypeHTTP,
+		Domains: []string{"teaos.cn", "www.teaos.cn", "meloy.cn"},
 	})
 	certData, keyData, err := req.runHTTP()
 	if err != nil {

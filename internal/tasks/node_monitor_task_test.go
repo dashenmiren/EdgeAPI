@@ -1,34 +1,17 @@
-package tasks_test
+package tasks
 
 import (
-	"testing"
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestNodeMonitorTask_loop(t *testing.T) {
 	dbs.NotifyReady()
 
-	var task = tasks.NewNodeMonitorTask(60 * time.Second)
-	err := task.Loop()
+	task := NewNodeMonitorTask(60)
+	err := task.loop()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log("ok")
-}
-
-func TestNodeMonitorTask_Monitor(t *testing.T) {
-	dbs.NotifyReady()
-	var task = tasks.NewNodeMonitorTask(60 * time.Second)
-	for i := 0; i < 5; i++ {
-		err := task.MonitorCluster(&models.NodeCluster{
-			Id: 42,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
 }

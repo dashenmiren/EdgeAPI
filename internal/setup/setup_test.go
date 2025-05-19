@@ -1,9 +1,8 @@
 package setup
 
 import (
-	"testing"
-
 	_ "github.com/iwind/TeaGo/bootstrap"
+	"testing"
 )
 
 func TestSetup_Run(t *testing.T) {

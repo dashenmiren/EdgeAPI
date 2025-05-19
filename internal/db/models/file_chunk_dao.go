@@ -2,7 +2,6 @@ package models
 
 import (
 	"errors"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -30,9 +29,9 @@ func init() {
 	})
 }
 
-// CreateFileChunk 创建文件Chunk
+// 创建文件Chunk
 func (this *FileChunkDAO) CreateFileChunk(tx *dbs.Tx, fileId int64, data []byte) (int64, error) {
-	var op = NewFileChunkOperator()
+	op := NewFileChunkOperator()
 	op.FileId = fileId
 	op.Data = data
 	err := this.Save(tx, op)
@@ -42,7 +41,7 @@ func (this *FileChunkDAO) CreateFileChunk(tx *dbs.Tx, fileId int64, data []byte)
 	return types.Int64(op.Id), nil
 }
 
-// FindAllFileChunks 列出所有的文件Chunk
+// 列出所有的文件Chunk
 func (this *FileChunkDAO) FindAllFileChunks(tx *dbs.Tx, fileId int64) (result []*FileChunk, err error) {
 	_, err = this.Query(tx).
 		Attr("fileId", fileId).
@@ -52,7 +51,7 @@ func (this *FileChunkDAO) FindAllFileChunks(tx *dbs.Tx, fileId int64) (result []
 	return
 }
 
-// FindAllFileChunkIds 读取文件的所有片段ID
+// 读取文件的所有片段ID
 func (this *FileChunkDAO) FindAllFileChunkIds(tx *dbs.Tx, fileId int64) ([]int64, error) {
 	ones, err := this.Query(tx).
 		Attr("fileId", fileId).
@@ -69,7 +68,7 @@ func (this *FileChunkDAO) FindAllFileChunkIds(tx *dbs.Tx, fileId int64) ([]int64
 	return result, nil
 }
 
-// DeleteFileChunks 删除以前的文件
+// 删除以前的文件
 func (this *FileChunkDAO) DeleteFileChunks(tx *dbs.Tx, fileId int64) error {
 	if fileId <= 0 {
 		return errors.New("invalid fileId")
@@ -80,7 +79,7 @@ func (this *FileChunkDAO) DeleteFileChunks(tx *dbs.Tx, fileId int64) error {
 	return err
 }
 
-// FindFileChunk 根据ID查找片段
+// 根据ID查找片段
 func (this *FileChunkDAO) FindFileChunk(tx *dbs.Tx, chunkId int64) (*FileChunk, error) {
 	one, err := this.Query(tx).
 		Pk(chunkId).

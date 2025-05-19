@@ -3,7 +3,6 @@ package models
 import (
 	"encoding/json"
 	"errors"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -36,7 +35,7 @@ func (this *SysEventDAO) CreateEvent(tx *dbs.Tx, event EventInterface) error {
 		return errors.New("event should not be nil")
 	}
 
-	var op = NewSysEventOperator()
+	op := NewSysEventOperator()
 	op.Type = event.Type()
 
 	eventJSON, err := json.Marshal(event)
@@ -52,7 +51,7 @@ func (this *SysEventDAO) CreateEvent(tx *dbs.Tx, event EventInterface) error {
 // 查找事件
 func (this *SysEventDAO) FindEvents(tx *dbs.Tx, size int64) (result []*SysEvent, err error) {
 	_, err = this.Query(tx).
-		AscPk().
+		Asc().
 		Limit(size).
 		Slice(&result).
 		FindAll()

@@ -1,15 +1,12 @@
 package models
 
 import (
-	"errors"
-	"strings"
-	"time"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
+	"time"
 )
 
 type SysLockerDAO dbs.DAO
@@ -33,7 +30,7 @@ func init() {
 	})
 }
 
-// Lock 开锁
+// 开锁
 func (this *SysLockerDAO) Lock(tx *dbs.Tx, key string, timeout int64) (ok bool, err error) {
 	maxErrors := 5
 	for {
@@ -50,7 +47,7 @@ func (this *SysLockerDAO) Lock(tx *dbs.Tx, key string, timeout int64) (ok bool, 
 
 		// 如果没有锁，则创建
 		if one == nil {
-			var op = NewSysLockerOperator()
+			op := NewSysLockerOperator()
 			op.Key = key
 			op.TimeoutAt = time.Now().Unix() + timeout
 			op.Version = 1
@@ -67,13 +64,13 @@ func (this *SysLockerDAO) Lock(tx *dbs.Tx, key string, timeout int64) (ok bool, 
 		}
 
 		// 如果已经有锁
-		var locker = one.(*SysLocker)
+		locker := one.(*SysLocker)
 		if time.Now().Unix() <= int64(locker.TimeoutAt) {
 			return false, nil
 		}
 
 		// 修改
-		var op = NewSysLockerOperator()
+		op := NewSysLockerOperator()
 		op.Id = locker.Id
 		op.Version = locker.Version + 1
 		op.TimeoutAt = time.Now().Unix() + timeout
@@ -98,7 +95,7 @@ func (this *SysLockerDAO) Lock(tx *dbs.Tx, key string, timeout int64) (ok bool, 
 			}
 			continue
 		}
-		if types.Int64(version) > int64(locker.Version)+1 {
+		if types.Int64(version) != int64(locker.Version)+1 {
 			return false, nil
 		}
 
@@ -106,7 +103,7 @@ func (this *SysLockerDAO) Lock(tx *dbs.Tx, key string, timeout int64) (ok bool, 
 	}
 }
 
-// Unlock 解锁
+// 解锁
 func (this *SysLockerDAO) Unlock(tx *dbs.Tx, key string) error {
 	_, err := this.Query(tx).
 		Attr("key", key).
@@ -115,38 +112,11 @@ func (this *SysLockerDAO) Unlock(tx *dbs.Tx, key string) error {
 	return err
 }
 
-const sysLockerStep = 8
-
-var increment = NewSysLockerIncrement(sysLockerStep)
-
-// Increase 增加版本号
+// 增加版本号
 func (this *SysLockerDAO) Increase(tx *dbs.Tx, key string, defaultValue int64) (int64, error) {
-	// validate key
-	if strings.Contains(key, "'") {
-		return 0, errors.New("invalid key '" + key + "'")
-	}
-
 	if tx == nil {
 		var result int64
 		var err error
-
-		{
-			colValue, err := this.Query(tx).
-				Result("version").
-				Attr("key", key).
-				FindInt64Col(0)
-			if err != nil {
-				return 0, err
-			}
-			var lastVersion = types.Int64(colValue)
-			if lastVersion <= increment.MaxValue(key) {
-				value, ok := increment.Pop(key)
-				if ok {
-					return value, nil
-				}
-			}
-		}
-
 		err = this.Instance.RunTx(func(tx *dbs.Tx) error {
 			result, err = this.Increase(tx, key, defaultValue)
 			if err != nil {
@@ -156,26 +126,7 @@ func (this *SysLockerDAO) Increase(tx *dbs.Tx, key string, defaultValue int64) (
 		})
 		return result, err
 	}
-
-	// combine statements to make increasing faster
-	colValue, err := tx.FindCol(0, "INSERT INTO `"+this.Table+"` (`key`, `version`) VALUES ('"+key+"', "+types.String(defaultValue+sysLockerStep)+") ON DUPLICATE KEY UPDATE `version`=`version`+"+types.String(sysLockerStep)+"; SELECT `version` FROM `"+this.Table+"` WHERE `key`='"+key+"'")
-	if err != nil {
-		if CheckSQLErrCode(err, 1064 /** syntax error **/) {
-			// continue to use separated query
-			err = nil
-		} else {
-			return 0, err
-		}
-	} else {
-		var maxVersion = types.Int64(colValue)
-		var minVersion = maxVersion - sysLockerStep + 1
-		increment.Push(key, minVersion+1, maxVersion)
-
-		return minVersion, nil
-	}
-
-	err = this.Query(tx).
-		Reuse(false). // no need to prepare statement in every transaction
+	err := this.Query(tx).
 		InsertOrUpdateQuickly(maps.Map{
 			"key":     key,
 			"version": defaultValue,
@@ -185,15 +136,6 @@ func (this *SysLockerDAO) Increase(tx *dbs.Tx, key string, defaultValue int64) (
 	if err != nil {
 		return 0, err
 	}
-	return this.Query(tx).
-		Reuse(false). // no need to prepare statement in every transaction
-		Attr("key", key).
-		Result("version").
-		FindInt64Col(0)
-}
-
-// 读取当前版本号
-func (this *SysLockerDAO) Read(tx *dbs.Tx, key string) (int64, error) {
 	return this.Query(tx).
 		Attr("key", key).
 		Result("version").

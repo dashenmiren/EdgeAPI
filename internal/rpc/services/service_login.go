@@ -3,32 +3,27 @@ package services
 import (
 	"context"
 	"encoding/json"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
 	"github.com/iwind/TeaGo/maps"
 )
 
-// LoginService 管理员认证相关服务
+// 管理员认证相关服务
 type LoginService struct {
 	BaseService
 }
 
-// FindEnabledLogin 查找认证
+// 查找认证
 func (this *LoginService) FindEnabledLogin(ctx context.Context, req *pb.FindEnabledLoginRequest) (*pb.FindEnabledLoginResponse, error) {
-	_, userId, err := this.ValidateAdminAndUser(ctx, false)
+	_, err := this.ValidateAdmin(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	if userId > 0 {
-		req.UserId = userId
-	}
+	tx := this.NullTx()
 
-	var tx = this.NullTx()
-
-	login, err := models.SharedLoginDAO.FindEnabledLoginWithType(tx, req.AdminId, req.UserId, req.Type)
+	login, err := models.SharedLoginDAO.FindEnabledLoginWithAdminId(tx, req.AdminId, req.Type)
 	if err != nil {
 		return nil, err
 	}
@@ -38,16 +33,16 @@ func (this *LoginService) FindEnabledLogin(ctx context.Context, req *pb.FindEnab
 	return &pb.FindEnabledLoginResponse{Login: &pb.Login{
 		Id:         int64(login.Id),
 		Type:       login.Type,
-		ParamsJSON: login.Params,
-		IsOn:       login.IsOn,
+		ParamsJSON: []byte(login.Params),
+		IsOn:       login.IsOn == 1,
 		AdminId:    int64(login.AdminId),
 		UserId:     int64(login.UserId),
 	}}, nil
 }
 
-// UpdateLogin 修改认证
+// 修改认证
 func (this *LoginService) UpdateLogin(ctx context.Context, req *pb.UpdateLoginRequest) (*pb.RPCSuccess, error) {
-	_, userId, err := this.ValidateAdminAndUser(ctx, false)
+	_, err := this.ValidateAdmin(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -56,26 +51,22 @@ func (this *LoginService) UpdateLogin(ctx context.Context, req *pb.UpdateLoginRe
 		return nil, errors.New("'login' should not be nil")
 	}
 
-	var tx = this.NullTx()
-
-	if userId > 0 {
-		req.Login.UserId = userId
-	}
+	tx := this.NullTx()
 
 	if req.Login.IsOn {
-		var params = maps.Map{}
+		params := maps.Map{}
 		if len(req.Login.ParamsJSON) > 0 {
 			err = json.Unmarshal(req.Login.ParamsJSON, &params)
 			if err != nil {
 				return nil, err
 			}
 		}
-		err = models.SharedLoginDAO.UpdateLogin(tx, req.Login.AdminId, req.Login.UserId, req.Login.Type, params, req.Login.IsOn)
+		err = models.SharedLoginDAO.UpdateLogin(tx, req.Login.AdminId, req.Login.Type, params, req.Login.IsOn)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		err = models.SharedLoginDAO.DisableLoginWithType(tx, req.Login.AdminId, req.Login.UserId, req.Login.Type)
+		err = models.SharedLoginDAO.DisableLoginWithAdminId(tx, req.Login.AdminId, req.Login.Type)
 		if err != nil {
 			return nil, err
 		}

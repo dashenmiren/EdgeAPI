@@ -1,18 +1,15 @@
-package tasks_test
+package tasks
 
 import (
-	"testing"
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestNodeLogCleaner_loop(t *testing.T) {
 	dbs.NotifyReady()
 
-	var cleaner = tasks.NewNodeLogCleanerTask(24 * time.Hour)
-	err := cleaner.Loop()
+	cleaner := &NodeLogCleanerTask{}
+	err := cleaner.loop()
 	if err != nil {
 		t.Fatal(err)
 	}

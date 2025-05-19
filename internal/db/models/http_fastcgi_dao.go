@@ -2,10 +2,9 @@ package models
 
 import (
 	"encoding/json"
-
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/shared"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/shared"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -82,12 +81,12 @@ func (this *HTTPFastcgiDAO) ComposeFastcgiConfig(tx *dbs.Tx, fastcgiId int64) (*
 	}
 	config := &serverconfigs.HTTPFastcgiConfig{}
 	config.Id = int64(fastcgi.Id)
-	config.IsOn = fastcgi.IsOn
+	config.IsOn = fastcgi.IsOn == 1
 	config.Address = fastcgi.Address
 
 	if IsNotNull(fastcgi.Params) {
 		params := []*serverconfigs.HTTPFastcgiParam{}
-		err = json.Unmarshal(fastcgi.Params, &params)
+		err = json.Unmarshal([]byte(fastcgi.Params), &params)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +95,7 @@ func (this *HTTPFastcgiDAO) ComposeFastcgiConfig(tx *dbs.Tx, fastcgiId int64) (*
 
 	if IsNotNull(fastcgi.ReadTimeout) {
 		duration := &shared.TimeDuration{}
-		err = json.Unmarshal(fastcgi.ReadTimeout, duration)
+		err = json.Unmarshal([]byte(fastcgi.ReadTimeout), duration)
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +104,7 @@ func (this *HTTPFastcgiDAO) ComposeFastcgiConfig(tx *dbs.Tx, fastcgiId int64) (*
 
 	if IsNotNull(fastcgi.ConnTimeout) {
 		duration := &shared.TimeDuration{}
-		err = json.Unmarshal(fastcgi.ConnTimeout, duration)
+		err = json.Unmarshal([]byte(fastcgi.ConnTimeout), duration)
 		if err != nil {
 			return nil, err
 		}
@@ -122,7 +121,7 @@ func (this *HTTPFastcgiDAO) ComposeFastcgiConfig(tx *dbs.Tx, fastcgiId int64) (*
 
 // CreateFastcgi 创建Fastcgi
 func (this *HTTPFastcgiDAO) CreateFastcgi(tx *dbs.Tx, adminId int64, userId int64, isOn bool, address string, paramsJSON []byte, readTimeoutJSON []byte, connTimeoutJSON []byte, poolSize int32, pathInfoPattern string) (int64, error) {
-	var op = NewHTTPFastcgiOperator()
+	op := NewHTTPFastcgiOperator()
 	op.AdminId = adminId
 	op.UserId = userId
 	op.IsOn = isOn
@@ -148,7 +147,7 @@ func (this *HTTPFastcgiDAO) UpdateFastcgi(tx *dbs.Tx, fastcgiId int64, isOn bool
 	if fastcgiId <= 0 {
 		return errors.New("invalid 'fastcgiId'")
 	}
-	var op = NewHTTPFastcgiOperator()
+	op := NewHTTPFastcgiOperator()
 	op.Id = fastcgiId
 	op.IsOn = isOn
 	op.Address = address

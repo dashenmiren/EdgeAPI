@@ -1,19 +1,12 @@
 package models
 
 import (
-	"regexp"
-
-	dbutils "github.com/dashenmiren/EdgeAPI/internal/db/utils"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeAPI/internal/utils"
-	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/ipconfigs"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/ipconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
-	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/types"
 )
 
@@ -22,38 +15,7 @@ const (
 	IPListStateDisabled = 0 // 已禁用
 )
 
-var listTypeCacheMap = map[int64]*IPList{} // listId => *IPList
-var DefaultGlobalBlackIPList = &IPList{
-	Id:       uint32(firewallconfigs.GlobalBlackListId),
-	Name:     "系统黑名单",
-	IsPublic: true,
-	IsGlobal: true,
-	Type:     "black",
-	State:    IPListStateEnabled,
-	IsOn:     true,
-}
-
-var DefaultGlobalWhiteIPList = &IPList{
-	Id:       uint32(firewallconfigs.GlobalWhiteListId),
-	Name:     "系统白名单",
-	IsPublic: true,
-	IsGlobal: true,
-	Type:     "white",
-	State:    IPListStateEnabled,
-	IsOn:     true,
-}
-
-var DefaultGlobalGreyIPList = &IPList{
-	Id:       uint32(firewallconfigs.GlobalGreyListId),
-	Name:     "系统灰名单",
-	IsPublic: true,
-	IsGlobal: true,
-	Type:     "grey",
-	State:    IPListStateEnabled,
-	IsOn:     true,
-}
-
-var ipListCodeRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+var listTypeCacheMap = map[int64]string{} // listId => type
 
 type IPListDAO dbs.DAO
 
@@ -76,7 +38,7 @@ func init() {
 	})
 }
 
-// EnableIPList 启用条目
+// 启用条目
 func (this *IPListDAO) EnableIPList(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -85,34 +47,17 @@ func (this *IPListDAO) EnableIPList(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// DisableIPList 禁用条目
-func (this *IPListDAO) DisableIPList(tx *dbs.Tx, listId int64) error {
+// 禁用条目
+func (this *IPListDAO) DisableIPList(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
-		Pk(listId).
+		Pk(id).
 		Set("state", IPListStateDisabled).
 		Update()
-	if err != nil {
-		return err
-	}
-
-	return this.NotifyUpdate(tx, listId, NodeTaskTypeIPListDeleted+"@"+string(maps.Map{"listId": listId}.AsJSON()))
+	return err
 }
 
-// FindEnabledIPList 查找启用中的条目
-func (this *IPListDAO) FindEnabledIPList(tx *dbs.Tx, id int64, cacheMap *utils.CacheMap) (*IPList, error) {
-	globalList, ok := this.findGlobalList(id)
-	if ok {
-		return globalList, nil
-	}
-
-	var cacheKey = this.Table + ":FindEnabledIPList:" + types.String(id)
-	if cacheMap != nil {
-		cache, ok := cacheMap.Get(cacheKey)
-		if ok {
-			return cache.(*IPList), nil
-		}
-	}
-
+// 查找启用中的条目
+func (this *IPListDAO) FindEnabledIPList(tx *dbs.Tx, id int64) (*IPList, error) {
 	result, err := this.Query(tx).
 		Pk(id).
 		Attr("state", IPListStateEnabled).
@@ -120,15 +65,10 @@ func (this *IPListDAO) FindEnabledIPList(tx *dbs.Tx, id int64, cacheMap *utils.C
 	if result == nil {
 		return nil, err
 	}
-
-	if cacheMap != nil {
-		cacheMap.Put(cacheKey, result)
-	}
-
 	return result.(*IPList), err
 }
 
-// FindIPListName 根据主键查找名称
+// 根据主键查找名称
 func (this *IPListDAO) FindIPListName(tx *dbs.Tx, id int64) (string, error) {
 	return this.Query(tx).
 		Pk(id).
@@ -136,43 +76,41 @@ func (this *IPListDAO) FindIPListName(tx *dbs.Tx, id int64) (string, error) {
 		FindStringCol("")
 }
 
-// FindIPListCacheable 获取名单
-func (this *IPListDAO) FindIPListCacheable(tx *dbs.Tx, listId int64) (*IPList, error) {
-	globalList, ok := this.findGlobalList(listId)
-	if ok {
-		return globalList, nil
-	}
-
+// 获取名单类型
+func (this *IPListDAO) FindIPListTypeCacheable(tx *dbs.Tx, listId int64) (string, error) {
 	// 检查缓存
 	SharedCacheLocker.RLock()
-	list, ok := listTypeCacheMap[listId]
+	listType, ok := listTypeCacheMap[listId]
 	SharedCacheLocker.RUnlock()
 	if ok {
-		return list, nil
+		return listType, nil
 	}
 
-	one, err := this.Query(tx).
+	listType, err := this.Query(tx).
 		Pk(listId).
-		Result("isGlobal", "type", "state", "id", "isPublic", "isGlobal").
-		Find()
-	if err != nil || one == nil {
-		return nil, err
+		Result("type").
+		FindStringCol("")
+	if err != nil {
+		return "", err
+	}
+
+	if len(listType) == 0 {
+		return "", nil
 	}
 
 	// 保存缓存
 	SharedCacheLocker.Lock()
-	listTypeCacheMap[listId] = one.(*IPList)
+	listTypeCacheMap[listId] = listType
 	SharedCacheLocker.Unlock()
 
-	return one.(*IPList), nil
+	return listType, nil
 }
 
-// CreateIPList 创建名单
-func (this *IPListDAO) CreateIPList(tx *dbs.Tx, userId int64, serverId int64, listType ipconfigs.IPListType, name string, code string, timeoutJSON []byte, description string, isPublic bool, isGlobal bool) (int64, error) {
-	var op = NewIPListOperator()
+// 创建名单
+func (this *IPListDAO) CreateIPList(tx *dbs.Tx, userId int64, listType ipconfigs.IPListType, name string, code string, timeoutJSON []byte) (int64, error) {
+	op := NewIPListOperator()
 	op.IsOn = true
 	op.UserId = userId
-	op.ServerId = serverId
 	op.State = IPListStateEnabled
 	op.Type = listType
 	op.Name = name
@@ -180,36 +118,19 @@ func (this *IPListDAO) CreateIPList(tx *dbs.Tx, userId int64, serverId int64, li
 	if len(timeoutJSON) > 0 {
 		op.Timeout = timeoutJSON
 	}
-	op.Description = description
-	op.IsPublic = isPublic
-	op.IsGlobal = isGlobal
 	err := this.Save(tx, op)
 	if err != nil {
 		return 0, err
 	}
-	var newListId = types.Int64(op.Id)
-
-	// 防止和全局名单ID冲突
-	if lists.ContainsInt64(firewallconfigs.FindGlobalListIds(), newListId) {
-		// 先删除
-		err = this.Query(tx).Pk(newListId).DeleteQuickly()
-		if err != nil {
-			return 0, err
-		}
-
-		// 自动创建下一个
-		return this.CreateIPList(tx, userId, serverId, listType, name, code, timeoutJSON, description, isPublic, isGlobal)
-	}
-
-	return newListId, nil
+	return types.Int64(op.Id), nil
 }
 
-// UpdateIPList 修改名单
-func (this *IPListDAO) UpdateIPList(tx *dbs.Tx, listId int64, name string, code string, timeoutJSON []byte, description string) error {
+// 修改名单
+func (this *IPListDAO) UpdateIPList(tx *dbs.Tx, listId int64, name string, code string, timeoutJSON []byte) error {
 	if listId <= 0 {
 		return errors.New("invalid listId")
 	}
-	var op = NewIPListOperator()
+	op := NewIPListOperator()
 	op.Id = listId
 	op.Name = name
 	op.Code = code
@@ -218,119 +139,37 @@ func (this *IPListDAO) UpdateIPList(tx *dbs.Tx, listId int64, name string, code 
 	} else {
 		op.Timeout = "null"
 	}
-	op.Description = description
 	err := this.Save(tx, op)
 	return err
 }
 
-// IncreaseVersion 增加版本
+// 增加版本
 func (this *IPListDAO) IncreaseVersion(tx *dbs.Tx) (int64, error) {
 	return SharedSysLockerDAO.Increase(tx, "IP_LIST_VERSION", 1000000)
 }
 
-// CheckUserIPList 检查用户权限
+// 检查用户权限
 func (this *IPListDAO) CheckUserIPList(tx *dbs.Tx, userId int64, listId int64) error {
-	if userId == 0 || listId == 0 {
-		return ErrNotFound
-	}
-
-	// 获取名单信息
-	listOne, err := this.Query(tx).
+	ok, err := this.Query(tx).
 		Pk(listId).
-		Result("userId", "serverId").
-		Find()
+		Attr("userId", userId).
+		Exist()
 	if err != nil {
 		return err
 	}
-	if listOne == nil {
-		return ErrNotFound
-	}
-	var list = listOne.(*IPList)
-	if int64(list.UserId) == userId {
+	if ok {
 		return nil
 	}
-
-	var serverId = int64(list.ServerId)
-	if serverId > 0 {
-		return SharedServerDAO.CheckUserServer(tx, userId, serverId)
-	}
-
 	return ErrNotFound
 }
 
-// CountAllEnabledIPLists 计算名单数量
-func (this *IPListDAO) CountAllEnabledIPLists(tx *dbs.Tx, listType string, isPublic bool, keyword string) (int64, error) {
-	var query = this.Query(tx).
-		State(IPListStateEnabled).
-		Attr("type", listType).
-		Attr("isPublic", isPublic)
-	if len(keyword) > 0 {
-		query.Where("(name LIKE :keyword OR description LIKE :keyword OR code LIKE :keyword)").
-			Param("keyword", dbutils.QuoteLike(keyword))
-	}
-	return query.Count()
-}
-
-// ListEnabledIPLists 列出单页名单
-func (this *IPListDAO) ListEnabledIPLists(tx *dbs.Tx, listType string, isPublic bool, keyword string, offset int64, size int64) (result []*IPList, err error) {
-	var query = this.Query(tx).
-		State(IPListStateEnabled).
-		Attr("type", listType).
-		Attr("isPublic", isPublic)
-	if len(keyword) > 0 {
-		query.Where("(name LIKE :keyword OR description LIKE :keyword OR code LIKE :keyword)").
-			Param("keyword", dbutils.QuoteLike(keyword))
-	}
-	_, err = query.Offset(offset).
-		Limit(size).
-		DescPk().
-		Slice(&result).
-		FindAll()
-	return
-}
-
-// ExistsEnabledIPList 检查IP名单是否存在
-func (this *IPListDAO) ExistsEnabledIPList(tx *dbs.Tx, listId int64) (bool, error) {
-	if listId <= 0 {
-		return false, nil
-	}
-	return this.Query(tx).
-		Pk(listId).
-		State(IPListStateEnabled).
-		Exist()
-}
-
-// NotifyUpdate 通知更新
+// 通知更新
 func (this *IPListDAO) NotifyUpdate(tx *dbs.Tx, listId int64, taskType NodeTaskType) error {
-	// WAF策略中的
 	httpFirewallPolicyIds, err := SharedHTTPFirewallPolicyDAO.FindEnabledFirewallPolicyIdsWithIPListId(tx, listId)
 	if err != nil {
 		return err
 	}
-
-	// 规则集动作中使用此名单的策略
-	ruleSetIds, err := SharedHTTPFirewallRuleSetDAO.FindAllEnabledRuleSetIdsWithIPListId(tx, listId)
-	if err != nil {
-		return err
-	}
-	for _, ruleSetId := range ruleSetIds {
-		ruleGroupId, err := SharedHTTPFirewallRuleGroupDAO.FindRuleGroupIdWithRuleSetId(tx, ruleSetId)
-		if err != nil {
-			return err
-		}
-		if ruleGroupId > 0 {
-			policyId, err := SharedHTTPFirewallPolicyDAO.FindEnabledFirewallPolicyIdWithRuleGroupId(tx, ruleGroupId)
-			if err != nil {
-				return err
-			}
-			if policyId > 0 && !lists.ContainsInt64(httpFirewallPolicyIds, policyId) {
-				httpFirewallPolicyIds = append(httpFirewallPolicyIds, policyId)
-			}
-		}
-	}
-
-	// 查找集群
-	var resultClusterIds = []int64{}
+	resultClusterIds := []int64{}
 	for _, policyId := range httpFirewallPolicyIds {
 		// 集群
 		clusterIds, err := SharedNodeClusterDAO.FindAllEnabledNodeClusterIdsWithHTTPFirewallPolicyId(tx, policyId)
@@ -369,7 +208,7 @@ func (this *IPListDAO) NotifyUpdate(tx *dbs.Tx, listId int64, taskType NodeTaskT
 
 	if len(resultClusterIds) > 0 {
 		for _, clusterId := range resultClusterIds {
-			err = SharedNodeTaskDAO.CreateClusterTask(tx, nodeconfigs.NodeRoleNode, clusterId, 0, 0, taskType)
+			err = SharedNodeTaskDAO.CreateClusterTask(tx, clusterId, taskType)
 			if err != nil {
 				return err
 			}
@@ -377,48 +216,4 @@ func (this *IPListDAO) NotifyUpdate(tx *dbs.Tx, listId int64, taskType NodeTaskT
 	}
 
 	return nil
-}
-
-// FindServerIdWithListId 查找IP名单对应的网站ID
-func (this *IPListDAO) FindServerIdWithListId(tx *dbs.Tx, listId int64) (serverId int64, err error) {
-	if listId <= 0 {
-		return
-	}
-
-	serverId, err = this.Query(tx).
-		Pk(listId).
-		Result("serverId").
-		FindInt64Col(0)
-	return
-}
-
-// FindIPListIdWithCode 根据IP名单代号查找名单ID
-func (this *IPListDAO) FindIPListIdWithCode(tx *dbs.Tx, listCode string) (int64, error) {
-	if len(listCode) == 0 {
-		return 0, nil
-	}
-	return this.Query(tx).
-		ResultPk().
-		State(IPListStateEnabled).
-		Attr("code", listCode).
-		FindInt64Col(0)
-}
-
-// ValidateIPListCode 校验IP名单代号格式
-func (this *IPListDAO) ValidateIPListCode(code string) bool {
-	return ipListCodeRegexp.MatchString(code)
-}
-
-// 查找ID对应的全局名单
-func (this *IPListDAO) findGlobalList(id int64) (list *IPList, ok bool) {
-	switch id {
-	case firewallconfigs.GlobalBlackListId:
-		return DefaultGlobalBlackIPList, true
-	case firewallconfigs.GlobalWhiteListId:
-		return DefaultGlobalWhiteIPList, true
-	case firewallconfigs.GlobalGreyListId:
-		return DefaultGlobalGreyIPList, true
-	}
-
-	return
 }

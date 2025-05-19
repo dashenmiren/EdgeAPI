@@ -1,9 +1,7 @@
 package models
 
 import (
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -36,7 +34,7 @@ func init() {
 	})
 }
 
-// EnableUserAccessKey 启用条目
+// 启用条目
 func (this *UserAccessKeyDAO) EnableUserAccessKey(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -45,7 +43,7 @@ func (this *UserAccessKeyDAO) EnableUserAccessKey(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// DisableUserAccessKey 禁用条目
+// 禁用条目
 func (this *UserAccessKeyDAO) DisableUserAccessKey(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -54,7 +52,7 @@ func (this *UserAccessKeyDAO) DisableUserAccessKey(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// FindEnabledUserAccessKey 查找启用中的条目
+// 查找启用中的条目
 func (this *UserAccessKeyDAO) FindEnabledUserAccessKey(tx *dbs.Tx, id int64) (*UserAccessKey, error) {
 	result, err := this.Query(tx).
 		Pk(id).
@@ -66,13 +64,12 @@ func (this *UserAccessKeyDAO) FindEnabledUserAccessKey(tx *dbs.Tx, id int64) (*U
 	return result.(*UserAccessKey), err
 }
 
-// CreateAccessKey 创建Key
-func (this *UserAccessKeyDAO) CreateAccessKey(tx *dbs.Tx, adminId int64, userId int64, description string) (int64, error) {
-	if adminId <= 0 && userId <= 0 {
-		return 0, errors.New("invalid adminId or userId")
+// 创建Key
+func (this *UserAccessKeyDAO) CreateAccessKey(tx *dbs.Tx, userId int64, description string) (int64, error) {
+	if userId <= 0 {
+		return 0, errors.New("invalid userId")
 	}
-	var op = NewUserAccessKeyOperator()
-	op.AdminId = adminId
+	op := NewUserAccessKeyOperator()
 	op.UserId = userId
 	op.Description = description
 	op.UniqueId = rands.String(16)
@@ -82,11 +79,9 @@ func (this *UserAccessKeyDAO) CreateAccessKey(tx *dbs.Tx, adminId int64, userId 
 	return this.SaveInt64(tx, op)
 }
 
-// FindAllEnabledAccessKeys 查找用户所有的Key
-func (this *UserAccessKeyDAO) FindAllEnabledAccessKeys(tx *dbs.Tx, adminId int64, userId int64) (result []*UserAccessKey, err error) {
+// 查找用户所有的Key
+func (this *UserAccessKeyDAO) FindAllEnabledAccessKeys(tx *dbs.Tx, userId int64) (result []*UserAccessKey, err error) {
 	_, err = this.Query(tx).
-		Attr("adminId", adminId).
-		Attr("userId", userId).
 		State(UserAccessKeyStateEnabled).
 		DescPk().
 		Slice(&result).
@@ -94,17 +89,16 @@ func (this *UserAccessKeyDAO) FindAllEnabledAccessKeys(tx *dbs.Tx, adminId int64
 	return
 }
 
-// CheckUserAccessKey 检查用户的AccessKey
-func (this *UserAccessKeyDAO) CheckUserAccessKey(tx *dbs.Tx, adminId int64, userId int64, accessKeyId int64) (bool, error) {
+// 检查用户的AccessKey
+func (this *UserAccessKeyDAO) CheckUserAccessKey(tx *dbs.Tx, userId int64, accessKeyId int64) (bool, error) {
 	return this.Query(tx).
 		Pk(accessKeyId).
 		State(UserAccessKeyStateEnabled).
-		Attr("adminId", adminId).
 		Attr("userId", userId).
 		Exist()
 }
 
-// UpdateAccessKeyIsOn 设置是否启用
+// 设置是否启用
 func (this *UserAccessKeyDAO) UpdateAccessKeyIsOn(tx *dbs.Tx, accessKeyId int64, isOn bool) error {
 	if accessKeyId <= 0 {
 		return errors.New("invalid accessKeyId")
@@ -116,7 +110,7 @@ func (this *UserAccessKeyDAO) UpdateAccessKeyIsOn(tx *dbs.Tx, accessKeyId int64,
 	return err
 }
 
-// FindAccessKeyWithUniqueId 根据UniqueId查找AccessKey
+// 根据UniqueId查找AccessKey
 func (this *UserAccessKeyDAO) FindAccessKeyWithUniqueId(tx *dbs.Tx, uniqueId string) (*UserAccessKey, error) {
 	one, err := this.Query(tx).
 		Attr("uniqueId", uniqueId).
@@ -128,21 +122,4 @@ func (this *UserAccessKeyDAO) FindAccessKeyWithUniqueId(tx *dbs.Tx, uniqueId str
 	}
 
 	return one.(*UserAccessKey), nil
-}
-
-// UpdateAccessKeyAccessedAt 更新AccessKey访问时间
-func (this *UserAccessKeyDAO) UpdateAccessKeyAccessedAt(tx *dbs.Tx, accessKeyId int64) error {
-	return this.Query(tx).
-		Pk(accessKeyId).
-		Set("accessedAt", time.Now().Unix()).
-		UpdateQuickly()
-}
-
-// CountAllEnabledAccessKeys 计算可用AccessKey数量
-func (this *UserAccessKeyDAO) CountAllEnabledAccessKeys(tx *dbs.Tx, adminId int64, userId int64) (int64, error) {
-	return this.Query(tx).
-		Attr("adminId", adminId).
-		Attr("userId", userId).
-		State(UserAccessKeyStateEnabled).
-		Count()
 }

@@ -1,15 +1,14 @@
 package utils
 
 import (
+	"github.com/iwind/TeaGo/Tea"
+	"github.com/iwind/TeaGo/files"
+	"github.com/iwind/TeaGo/logs"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
-
-	"github.com/iwind/TeaGo/Tea"
-	"github.com/iwind/TeaGo/files"
-	"github.com/iwind/TeaGo/logs"
 )
 
 // 服务管理器
@@ -40,7 +39,7 @@ func (this *ServiceManager) setup() {
 	this.onceLocker.Do(func() {
 		logFile := files.NewFile(Tea.Root + "/logs/service.log")
 		if logFile.Exists() {
-			_ = logFile.Delete()
+			logFile.Delete()
 		}
 
 		//logger

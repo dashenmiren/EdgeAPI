@@ -2,9 +2,8 @@ package models
 
 import (
 	"encoding/json"
-
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs/firewallconfigs"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs/firewallconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
@@ -38,12 +37,12 @@ func init() {
 	})
 }
 
-// Init 初始化
+// 初始化
 func (this *HTTPFirewallRuleSetDAO) Init() {
 	_ = this.DAOObject.Init()
 }
 
-// EnableHTTPFirewallRuleSet 启用条目
+// 启用条目
 func (this *HTTPFirewallRuleSetDAO) EnableHTTPFirewallRuleSet(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -52,7 +51,7 @@ func (this *HTTPFirewallRuleSetDAO) EnableHTTPFirewallRuleSet(tx *dbs.Tx, id int
 	return err
 }
 
-// DisableHTTPFirewallRuleSet 禁用条目
+// 禁用条目
 func (this *HTTPFirewallRuleSetDAO) DisableHTTPFirewallRuleSet(tx *dbs.Tx, ruleSetId int64) error {
 	_, err := this.Query(tx).
 		Pk(ruleSetId).
@@ -64,7 +63,7 @@ func (this *HTTPFirewallRuleSetDAO) DisableHTTPFirewallRuleSet(tx *dbs.Tx, ruleS
 	return this.NotifyUpdate(tx, ruleSetId)
 }
 
-// FindEnabledHTTPFirewallRuleSet 查找启用中的条目
+// 查找启用中的条目
 func (this *HTTPFirewallRuleSetDAO) FindEnabledHTTPFirewallRuleSet(tx *dbs.Tx, id int64) (*HTTPFirewallRuleSet, error) {
 	result, err := this.Query(tx).
 		Pk(id).
@@ -76,7 +75,7 @@ func (this *HTTPFirewallRuleSetDAO) FindEnabledHTTPFirewallRuleSet(tx *dbs.Tx, i
 	return result.(*HTTPFirewallRuleSet), err
 }
 
-// FindHTTPFirewallRuleSetName 根据主键查找名称
+// 根据主键查找名称
 func (this *HTTPFirewallRuleSetDAO) FindHTTPFirewallRuleSetName(tx *dbs.Tx, id int64) (string, error) {
 	return this.Query(tx).
 		Pk(id).
@@ -84,8 +83,8 @@ func (this *HTTPFirewallRuleSetDAO) FindHTTPFirewallRuleSetName(tx *dbs.Tx, id i
 		FindStringCol("")
 }
 
-// ComposeFirewallRuleSet 组合配置
-func (this *HTTPFirewallRuleSetDAO) ComposeFirewallRuleSet(tx *dbs.Tx, setId int64, forNode bool) (*firewallconfigs.HTTPFirewallRuleSet, error) {
+// 组合配置
+func (this *HTTPFirewallRuleSetDAO) ComposeFirewallRuleSet(tx *dbs.Tx, setId int64) (*firewallconfigs.HTTPFirewallRuleSet, error) {
 	set, err := this.FindEnabledHTTPFirewallRuleSet(tx, setId)
 	if err != nil {
 		return nil, err
@@ -93,19 +92,17 @@ func (this *HTTPFirewallRuleSetDAO) ComposeFirewallRuleSet(tx *dbs.Tx, setId int
 	if set == nil {
 		return nil, nil
 	}
-	var config = &firewallconfigs.HTTPFirewallRuleSet{}
+	config := &firewallconfigs.HTTPFirewallRuleSet{}
 	config.Id = int64(set.Id)
-	config.IsOn = set.IsOn
+	config.IsOn = set.IsOn == 1
 	config.Name = set.Name
 	config.Description = set.Description
 	config.Code = set.Code
 	config.Connector = set.Connector
-	config.IgnoreLocal = set.IgnoreLocal
-	config.IgnoreSearchEngine = set.IgnoreSearchEngine
 
 	if IsNotNull(set.Rules) {
-		var ruleRefs = []*firewallconfigs.HTTPFirewallRuleRef{}
-		err = json.Unmarshal(set.Rules, &ruleRefs)
+		ruleRefs := []*firewallconfigs.HTTPFirewallRuleRef{}
+		err = json.Unmarshal([]byte(set.Rules), &ruleRefs)
 		if err != nil {
 			return nil, err
 		}
@@ -121,64 +118,40 @@ func (this *HTTPFirewallRuleSetDAO) ComposeFirewallRuleSet(tx *dbs.Tx, setId int
 		}
 	}
 
-	var actionConfigs = []*firewallconfigs.HTTPFirewallActionConfig{}
-	if len(set.Actions) > 0 {
-		err = json.Unmarshal(set.Actions, &actionConfigs)
+	config.Action = set.Action
+	if IsNotNull(set.ActionOptions) {
+		options := maps.Map{}
+		err = json.Unmarshal([]byte(set.ActionOptions), &options)
 		if err != nil {
 			return nil, err
 		}
-		config.Actions = actionConfigs
-	}
-
-	// 检查各个选项
-	for _, actionConfig := range actionConfigs {
-		if actionConfig.Code == firewallconfigs.HTTPFirewallActionRecordIP { // 记录IP动作
-			if actionConfig.Options != nil {
-				var ipListId = actionConfig.Options.GetInt64("ipListId")
-				if ipListId <= 0 { // default list id
-					if forNode {
-						actionConfig.Options["ipListId"] = firewallconfigs.FindGlobalListIdWithType(actionConfig.Options.GetString("type"))
-					}
-					actionConfig.Options["ipListIsDeleted"] = false
-				} else {
-					exists, err := SharedIPListDAO.ExistsEnabledIPList(tx, ipListId)
-					if err != nil {
-						return nil, err
-					}
-					if !exists {
-						actionConfig.Options["ipListIsDeleted"] = true
-					}
-				}
-			}
-		}
+		config.ActionOptions = options
 	}
 
 	return config, nil
 }
 
-// CreateOrUpdateSetFromConfig 从配置中创建规则集
+// 从配置中创建规则集
 func (this *HTTPFirewallRuleSetDAO) CreateOrUpdateSetFromConfig(tx *dbs.Tx, setConfig *firewallconfigs.HTTPFirewallRuleSet) (int64, error) {
-	var op = NewHTTPFirewallRuleSetOperator()
+	op := NewHTTPFirewallRuleSetOperator()
 	op.State = HTTPFirewallRuleSetStateEnabled
 	op.Id = setConfig.Id
 	op.IsOn = setConfig.IsOn
 	op.Name = setConfig.Name
 	op.Description = setConfig.Description
 	op.Connector = setConfig.Connector
-	op.IgnoreLocal = setConfig.IgnoreLocal
-	op.IgnoreSearchEngine = setConfig.IgnoreSearchEngine
+	op.Action = setConfig.Action
+	op.Code = setConfig.Code
 
-	if len(setConfig.Actions) == 0 {
-		op.Actions = "[]"
-	} else {
-		actionsJSON, err := json.Marshal(setConfig.Actions)
+	if setConfig.ActionOptions != nil {
+		actionOptionsJSON, err := json.Marshal(setConfig.ActionOptions)
 		if err != nil {
 			return 0, err
 		}
-		op.Actions = actionsJSON
+		op.ActionOptions = actionOptionsJSON
+	} else {
+		op.ActionOptions = "{}"
 	}
-
-	op.Code = setConfig.Code
 
 	// rules
 	ruleRefs := []*firewallconfigs.HTTPFirewallRuleRef{}
@@ -213,7 +186,7 @@ func (this *HTTPFirewallRuleSetDAO) CreateOrUpdateSetFromConfig(tx *dbs.Tx, setC
 	return types.Int64(op.Id), nil
 }
 
-// UpdateRuleSetIsOn 设置是否启用
+// 设置是否启用
 func (this *HTTPFirewallRuleSetDAO) UpdateRuleSetIsOn(tx *dbs.Tx, ruleSetId int64, isOn bool) error {
 	if ruleSetId <= 0 {
 		return errors.New("invalid ruleSetId")
@@ -228,7 +201,7 @@ func (this *HTTPFirewallRuleSetDAO) UpdateRuleSetIsOn(tx *dbs.Tx, ruleSetId int6
 	return this.NotifyUpdate(tx, ruleSetId)
 }
 
-// FindEnabledRuleSetIdWithRuleId 根据规则查找规则集
+// 根据规则查找规则集
 func (this *HTTPFirewallRuleSetDAO) FindEnabledRuleSetIdWithRuleId(tx *dbs.Tx, ruleId int64) (int64, error) {
 	return this.Query(tx).
 		State(HTTPFirewallRuleStateEnabled).
@@ -238,29 +211,7 @@ func (this *HTTPFirewallRuleSetDAO) FindEnabledRuleSetIdWithRuleId(tx *dbs.Tx, r
 		FindInt64Col(0)
 }
 
-// FindAllEnabledRuleSetIdsWithIPListId 根据IP名单ID查找对应动作的WAF规则集
-func (this *HTTPFirewallRuleSetDAO) FindAllEnabledRuleSetIdsWithIPListId(tx *dbs.Tx, ipListId int64) (setIds []int64, err error) {
-	ones, err := this.Query(tx).
-		State(HTTPFirewallRuleStateEnabled).
-		Where("JSON_CONTAINS(actions, :jsonQuery)").
-		Param("jsonQuery", maps.Map{
-			"code": firewallconfigs.HTTPFirewallActionRecordIP,
-			"options": maps.Map{
-				"ipListId": ipListId,
-			},
-		}.AsJSON()).
-		ResultPk().
-		FindAll()
-	if err != nil {
-		return nil, err
-	}
-	for _, one := range ones {
-		setIds = append(setIds, int64(one.(*HTTPFirewallRuleSet).Id))
-	}
-	return
-}
-
-// CheckUserRuleSet 检查用户
+// 检查用户
 func (this *HTTPFirewallRuleSetDAO) CheckUserRuleSet(tx *dbs.Tx, userId int64, setId int64) error {
 	groupId, err := SharedHTTPFirewallRuleGroupDAO.FindRuleGroupIdWithRuleSetId(tx, setId)
 	if err != nil {
@@ -272,7 +223,7 @@ func (this *HTTPFirewallRuleSetDAO) CheckUserRuleSet(tx *dbs.Tx, userId int64, s
 	return SharedHTTPFirewallRuleGroupDAO.CheckUserRuleGroup(tx, userId, groupId)
 }
 
-// NotifyUpdate 通知更新
+// 通知更新
 func (this *HTTPFirewallRuleSetDAO) NotifyUpdate(tx *dbs.Tx, setId int64) error {
 	groupId, err := SharedHTTPFirewallRuleGroupDAO.FindRuleGroupIdWithRuleSetId(tx, setId)
 	if err != nil {

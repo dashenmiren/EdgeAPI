@@ -1,9 +1,8 @@
 package configs
 
 import (
-	"testing"
-
 	_ "github.com/iwind/TeaGo/bootstrap"
+	"testing"
 )
 
 func TestSharedAPIConfig(t *testing.T) {

@@ -1,6 +1,6 @@
 package acme
 
-import "github.com/dashenmiren/EdgeAPI/internal/dnsclients"
+import "github.com/TeaOSLab/EdgeAPI/internal/dnsclients"
 
 type AuthType = string
 
@@ -10,8 +10,6 @@ const (
 )
 
 type Task struct {
-	Provider *Provider
-	Account  *Account
 	User     *User
 	AuthType AuthType
 	Domains  []string

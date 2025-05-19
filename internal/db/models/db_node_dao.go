@@ -2,15 +2,13 @@ package models
 
 import (
 	"encoding/base64"
-	"strings"
-
-	"github.com/dashenmiren/EdgeAPI/internal/encrypt"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"github.com/TeaOSLab/EdgeAPI/internal/encrypt"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
+	"strings"
 )
 
 const (
@@ -41,7 +39,7 @@ func init() {
 	})
 }
 
-// EnableDBNode 启用条目
+// 启用条目
 func (this *DBNodeDAO) EnableDBNode(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
 		Pk(id).
@@ -50,21 +48,16 @@ func (this *DBNodeDAO) EnableDBNode(tx *dbs.Tx, id int64) error {
 	return err
 }
 
-// DisableDBNode 禁用条目
-func (this *DBNodeDAO) DisableDBNode(tx *dbs.Tx, nodeId int64) error {
+// 禁用条目
+func (this *DBNodeDAO) DisableDBNode(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
-		Pk(nodeId).
+		Pk(id).
 		Set("state", DBNodeStateDisabled).
 		Update()
-	if err != nil {
-		return err
-	}
-
-	// 删除运行日志
-	return SharedNodeLogDAO.DeleteNodeLogs(tx, nodeconfigs.NodeRoleDatabase, nodeId)
+	return err
 }
 
-// FindEnabledDBNode 查找启用中的条目
+// 查找启用中的条目
 func (this *DBNodeDAO) FindEnabledDBNode(tx *dbs.Tx, id int64) (*DBNode, error) {
 	result, err := this.Query(tx).
 		Pk(id).
@@ -78,7 +71,7 @@ func (this *DBNodeDAO) FindEnabledDBNode(tx *dbs.Tx, id int64) (*DBNode, error) 
 	return node, nil
 }
 
-// FindDBNodeName 根据主键查找名称
+// 根据主键查找名称
 func (this *DBNodeDAO) FindDBNodeName(tx *dbs.Tx, id int64) (string, error) {
 	return this.Query(tx).
 		Pk(id).
@@ -86,14 +79,14 @@ func (this *DBNodeDAO) FindDBNodeName(tx *dbs.Tx, id int64) (string, error) {
 		FindStringCol("")
 }
 
-// CountAllEnabledNodes 计算可用的节点数量
+// 计算可用的节点数量
 func (this *DBNodeDAO) CountAllEnabledNodes(tx *dbs.Tx) (int64, error) {
 	return this.Query(tx).
 		State(DBNodeStateEnabled).
 		Count()
 }
 
-// ListEnabledNodes 获取单页的节点
+// 获取单页的节点
 func (this *DBNodeDAO) ListEnabledNodes(tx *dbs.Tx, offset int64, size int64) (result []*DBNode, err error) {
 	_, err = this.Query(tx).
 		State(DBNodeStateEnabled).
@@ -108,9 +101,9 @@ func (this *DBNodeDAO) ListEnabledNodes(tx *dbs.Tx, offset int64, size int64) (r
 	return
 }
 
-// CreateDBNode 创建节点
+// 创建节点
 func (this *DBNodeDAO) CreateDBNode(tx *dbs.Tx, isOn bool, name string, description string, host string, port int32, database string, username string, password string, charset string) (int64, error) {
-	var op = NewDBNodeOperator()
+	op := NewDBNodeOperator()
 	op.State = NodeStateEnabled
 	op.IsOn = isOn
 	op.Name = name
@@ -128,12 +121,12 @@ func (this *DBNodeDAO) CreateDBNode(tx *dbs.Tx, isOn bool, name string, descript
 	return types.Int64(op.Id), nil
 }
 
-// UpdateNode 修改节点
+// 修改节点
 func (this *DBNodeDAO) UpdateNode(tx *dbs.Tx, nodeId int64, isOn bool, name string, description string, host string, port int32, database string, username string, password string, charset string) error {
 	if nodeId <= 0 {
 		return errors.New("invalid nodeId")
 	}
-	var op = NewDBNodeOperator()
+	op := NewDBNodeOperator()
 	op.Id = nodeId
 	op.IsOn = isOn
 	op.Name = name
@@ -148,7 +141,7 @@ func (this *DBNodeDAO) UpdateNode(tx *dbs.Tx, nodeId int64, isOn bool, name stri
 	return err
 }
 
-// FindAllEnabledAndOnDBNodes 查找所有可用的数据库节点
+// 查找所有可用的数据库节点
 func (this *DBNodeDAO) FindAllEnabledAndOnDBNodes(tx *dbs.Tx) (result []*DBNode, err error) {
 	_, err = this.Query(tx).
 		State(DBNodeStateEnabled).
@@ -162,7 +155,7 @@ func (this *DBNodeDAO) FindAllEnabledAndOnDBNodes(tx *dbs.Tx) (result []*DBNode,
 	return
 }
 
-// EncodePassword 加密密码
+// 加密密码
 func (this *DBNodeDAO) EncodePassword(password string) string {
 	if strings.HasPrefix(password, DBNodePasswordEncodedPrefix) {
 		return password
@@ -171,7 +164,7 @@ func (this *DBNodeDAO) EncodePassword(password string) string {
 	return DBNodePasswordEncodedPrefix + encodedString
 }
 
-// DecodePassword 解密密码
+// 解密密码
 func (this *DBNodeDAO) DecodePassword(password string) string {
 	if !strings.HasPrefix(password, DBNodePasswordEncodedPrefix) {
 		return password
@@ -182,16 +175,4 @@ func (this *DBNodeDAO) DecodePassword(password string) string {
 		return password
 	}
 	return string(encrypt.MagicKeyDecode(data))
-}
-
-// CheckNodeIsOn 检查节点是否已经启用
-func (this *DBNodeDAO) CheckNodeIsOn(tx *dbs.Tx, nodeId int64) (bool, error) {
-	isOn, err := this.Query(tx).
-		Pk(nodeId).
-		Result("isOn").
-		FindIntCol(0)
-	if err != nil {
-		return false, err
-	}
-	return isOn == 1, nil
 }

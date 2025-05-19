@@ -2,44 +2,38 @@ package tasks
 
 import (
 	"encoding/json"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeCommon/pkg/systemconfigs"
+	"github.com/iwind/TeaGo/dbs"
+	"github.com/iwind/TeaGo/logs"
+	timeutil "github.com/iwind/TeaGo/utils/time"
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeAPI/internal/goman"
-	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
-	"github.com/iwind/TeaGo/dbs"
-	timeutil "github.com/iwind/TeaGo/utils/time"
 )
 
 func init() {
-	dbs.OnReadyDone(func() {
-		goman.New(func() {
-			NewServerAccessLogCleaner(6 * time.Hour).Start()
-		})
+	dbs.OnReady(func() {
+		task := NewServerAccessLogCleaner()
+		go task.Start()
 	})
 }
 
-// ServerAccessLogCleaner 服务访问日志自动清理
+// 服务访问日志自动清理
 type ServerAccessLogCleaner struct {
-	BaseTask
-
-	ticker *time.Ticker
 }
 
-func NewServerAccessLogCleaner(duration time.Duration) *ServerAccessLogCleaner {
-	return &ServerAccessLogCleaner{
-		ticker: time.NewTicker(duration),
-	}
+func NewServerAccessLogCleaner() *ServerAccessLogCleaner {
+	return &ServerAccessLogCleaner{}
 }
 
 func (this *ServerAccessLogCleaner) Start() {
-	for range this.ticker.C {
+	ticker := time.NewTicker(12 * time.Hour)
+	for range ticker.C {
 		err := this.Loop()
 		if err != nil {
-			this.logErr("[TASK][ServerAccessLogCleaner]", err.Error())
+			logs.Println("[TASK][ServerAccessLogCleaner]Error: " + err.Error())
 		}
 	}
 }
@@ -53,7 +47,7 @@ func (this *ServerAccessLogCleaner) Loop() error {
 	if len(configJSON) == 0 {
 		return nil
 	}
-	var config = systemconfigs.NewDatabaseConfig()
+	config := &systemconfigs.DatabaseConfig{}
 	err = json.Unmarshal(configJSON, config)
 	if err != nil {
 		return err
@@ -61,8 +55,8 @@ func (this *ServerAccessLogCleaner) Loop() error {
 	if config.ServerAccessLog.Clean.Days <= 0 {
 		return nil
 	}
-	var days = config.ServerAccessLog.Clean.Days
-	var endDay = timeutil.Format("Ymd", time.Now().AddDate(0, 0, -days+1))
+	days := config.ServerAccessLog.Clean.Days
+	endDay := timeutil.Format("Ymd", time.Now().AddDate(0, 0, -days+1))
 
 	// 当前连接的数据库
 	db, err := dbs.Default()
@@ -80,53 +74,49 @@ func (this *ServerAccessLogCleaner) Loop() error {
 		return err
 	}
 	for _, node := range nodes {
-		err := func(node *models.DBNode) error {
-			var dbConfig = node.DBConfig()
-			nodeDB, err := dbs.NewInstanceFromConfig(dbConfig)
-			if err != nil {
-				return err
-			}
-
-			defer func() {
-				_ = nodeDB.Close()
-			}()
-
-			err = this.cleanDB(nodeDB, endDay)
-			if err != nil {
-				return err
-			}
-
-			return nil
-		}(node)
+		dbConfig := node.DBConfig()
+		db, err := dbs.NewInstanceFromConfig(dbConfig)
 		if err != nil {
 			return err
 		}
+		err = this.cleanDB(db, endDay)
+		if err != nil {
+			_ = db.Close()
+			return err
+		}
+
+		_ = db.Close()
 	}
 
 	return nil
 }
 
 func (this *ServerAccessLogCleaner) cleanDB(db *dbs.DB, endDay string) error {
-	ones, columnNames, err := db.FindPreparedOnes("SHOW TABLES")
+	ones, columnNames, err := db.FindOnes("SHOW TABLES")
 	if err != nil {
 		return err
 	}
 	if len(columnNames) != 1 {
 		return errors.New("invalid column names: " + strings.Join(columnNames, ", "))
 	}
-	var columnName = columnNames[0]
-	var reg = regexp.MustCompile(`^(?i)(edgeHTTPAccessLogs|edgeNSAccessLogs)_(\d{8})(_\d{4})?$`)
+	columnName := columnNames[0]
 	for _, one := range ones {
-		var tableName = one.GetString(columnName)
+		tableName := one.GetString(columnName)
 		if len(tableName) == 0 {
 			continue
 		}
-		if !reg.MatchString(tableName) {
+		ok, err := regexp.MatchString(`^(?i)edgeHTTPAccessLogs_(\d{8})$`, tableName)
+		if err != nil {
+			return err
+		}
+		if !ok {
 			continue
 		}
-		var matches = reg.FindStringSubmatch(tableName)
-		var day = matches[2]
-
+		index := strings.LastIndex(tableName, "_")
+		if index < 0 {
+			continue
+		}
+		day := tableName[index+1:]
 		if day < endDay {
 			_, err = db.Exec("DROP TABLE " + tableName)
 			if err != nil {

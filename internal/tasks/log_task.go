@@ -3,57 +3,62 @@ package tasks
 import (
 	"encoding/json"
 	"fmt"
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	"github.com/dashenmiren/EdgeAPI/internal/goman"
-	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
-	"github.com/dashenmiren/EdgeCommon/pkg/systemconfigs"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/TeaOSLab/EdgeAPI/internal/utils"
+	"github.com/TeaOSLab/EdgeAPI/internal/utils/numberutils"
+	"github.com/TeaOSLab/EdgeCommon/pkg/systemconfigs"
 	"github.com/iwind/TeaGo/dbs"
+	"github.com/iwind/TeaGo/logs"
+	"time"
 )
 
 func init() {
-	dbs.OnReadyDone(func() {
-		goman.New(func() {
-			NewLogTask(24*time.Hour, 1*time.Minute).Start()
-		})
+	dbs.OnReady(func() {
+		go NewLogTask().Run()
 	})
 }
 
 type LogTask struct {
-	BaseTask
-
-	cleanTicker   *time.Ticker
-	monitorTicker *time.Ticker
 }
 
-func NewLogTask(cleanDuration time.Duration, monitorDuration time.Duration) *LogTask {
-	return &LogTask{
-		cleanTicker:   time.NewTicker(cleanDuration),
-		monitorTicker: time.NewTicker(monitorDuration),
-	}
+func NewLogTask() *LogTask {
+	return &LogTask{}
 }
 
-func (this *LogTask) Start() {
-	goman.New(func() {
-		this.RunClean()
-	})
-	goman.New(func() {
-		this.RunMonitor()
-	})
+func (this *LogTask) Run() {
+	go this.runClean()
+	go this.runMonitor()
 }
 
-func (this *LogTask) RunClean() {
-	for range this.cleanTicker.C {
-		err := this.LoopClean()
+func (this *LogTask) runClean() {
+	ticker := utils.NewTicker(24 * time.Hour)
+	for ticker.Wait() {
+		err := this.loopClean(86400)
 		if err != nil {
-			this.logErr("LogTask", err.Error())
+			logs.Println("[TASK][LOG]" + err.Error())
 		}
 	}
 }
 
-func (this *LogTask) LoopClean() error {
-	var configKey = "adminLogConfig"
+func (this *LogTask) loopClean(seconds int64) error {
+	// 检查上次运行时间，防止重复运行
+	settingKey := "logTaskCleanLoop"
+	timestamp := time.Now().Unix()
+	c, err := models.SharedSysSettingDAO.CompareInt64Setting(nil, settingKey, timestamp-seconds)
+	if err != nil {
+		return err
+	}
+	if c > 0 {
+		return nil
+	}
+
+	// 记录时间
+	err = models.SharedSysSettingDAO.UpdateSetting(nil, settingKey, []byte(numberutils.FormatInt64(timestamp)))
+	if err != nil {
+		return err
+	}
+
+	configKey := "adminLogConfig"
 	valueJSON, err := models.SharedSysSettingDAO.ReadSetting(nil, configKey)
 	if err != nil {
 		return err
@@ -62,7 +67,7 @@ func (this *LogTask) LoopClean() error {
 		return nil
 	}
 
-	var config = &systemconfigs.LogConfig{}
+	config := &systemconfigs.LogConfig{}
 	err = json.Unmarshal(valueJSON, config)
 	if err != nil {
 		return err
@@ -76,22 +81,35 @@ func (this *LogTask) LoopClean() error {
 	return nil
 }
 
-func (this *LogTask) RunMonitor() {
-	for range this.monitorTicker.C {
-		err := this.LoopMonitor()
+func (this *LogTask) runMonitor() {
+	ticker := utils.NewTicker(1 * time.Minute)
+	for ticker.Wait() {
+		err := this.loopMonitor(60)
 		if err != nil {
-			this.logErr("LogTask", err.Error())
+			logs.Println("[TASK][LOG]" + err.Error())
 		}
 	}
 }
 
-func (this *LogTask) LoopMonitor() error {
-	// 检查是否为主节点
-	if !this.IsPrimaryNode() {
+func (this *LogTask) loopMonitor(seconds int64) error {
+	// 检查上次运行时间，防止重复运行
+	settingKey := "logTaskMonitorLoop"
+	timestamp := time.Now().Unix()
+	c, err := models.SharedSysSettingDAO.CompareInt64Setting(nil, settingKey, timestamp-seconds)
+	if err != nil {
+		return err
+	}
+	if c > 0 {
 		return nil
 	}
 
-	var configKey = "adminLogConfig"
+	// 记录时间
+	err = models.SharedSysSettingDAO.UpdateSetting(nil, settingKey, []byte(numberutils.FormatInt64(timestamp)))
+	if err != nil {
+		return err
+	}
+
+	configKey := "adminLogConfig"
 	valueJSON, err := models.SharedSysSettingDAO.ReadSetting(nil, configKey)
 	if err != nil {
 		return err
@@ -100,7 +118,7 @@ func (this *LogTask) LoopMonitor() error {
 		return nil
 	}
 
-	var config = &systemconfigs.LogConfig{}
+	config := &systemconfigs.LogConfig{}
 	err = json.Unmarshal(valueJSON, config)
 	if err != nil {
 		return err

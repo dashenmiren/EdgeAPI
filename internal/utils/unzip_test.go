@@ -1,10 +1,9 @@
 package utils
 
 import (
-	"testing"
-
 	"github.com/iwind/TeaGo/Tea"
 	_ "github.com/iwind/TeaGo/bootstrap"
+	"testing"
 )
 
 func TestUnzip_Run(t *testing.T) {

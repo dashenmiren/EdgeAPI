@@ -2,10 +2,9 @@ package services
 
 import (
 	"context"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models/acme"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models/acme"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
 )
 
 // ACME认证相关
@@ -23,7 +22,7 @@ func (this *ACMEAuthenticationService) FindACMEAuthenticationKeyWithToken(ctx co
 		return nil, errors.New("'token' should not be empty")
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
 	auth, err := acme.SharedACMEAuthenticationDAO.FindAuthWithToken(tx, req.Token)
 	if err != nil {

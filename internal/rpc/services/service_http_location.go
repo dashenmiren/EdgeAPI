@@ -3,29 +3,28 @@ package services
 import (
 	"context"
 	"encoding/json"
-
-	"github.com/dashenmiren/EdgeAPI/internal/db/models"
-	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"
-	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
-	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
+	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	rpcutils "github.com/TeaOSLab/EdgeAPI/internal/rpc/utils"
+	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
 )
 
-// HTTPLocationService 路由规则相关服务
+// HTTPLocationService 路径规则相关服务
 type HTTPLocationService struct {
 	BaseService
 }
 
-// CreateHTTPLocation 创建路由规则
+// CreateHTTPLocation 创建路径规则
 func (this *HTTPLocationService) CreateHTTPLocation(ctx context.Context, req *pb.CreateHTTPLocationRequest) (*pb.CreateHTTPLocationResponse, error) {
 	// 校验请求
-	_, err := this.ValidateAdmin(ctx)
+	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
 	if err != nil {
 		return nil, err
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
-	locationId, err := models.SharedHTTPLocationDAO.CreateLocation(tx, req.ParentId, req.Name, req.Pattern, req.Description, req.IsBreak, req.CondsJSON, req.Domains)
+	locationId, err := models.SharedHTTPLocationDAO.CreateLocation(tx, req.ParentId, req.Name, req.Pattern, req.Description, req.IsBreak, req.CondsJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -33,17 +32,17 @@ func (this *HTTPLocationService) CreateHTTPLocation(ctx context.Context, req *pb
 	return &pb.CreateHTTPLocationResponse{LocationId: locationId}, nil
 }
 
-// UpdateHTTPLocation 修改路由规则
+// UpdateHTTPLocation 修改路径规则
 func (this *HTTPLocationService) UpdateHTTPLocation(ctx context.Context, req *pb.UpdateHTTPLocationRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, err := this.ValidateAdmin(ctx)
+	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
 	if err != nil {
 		return nil, err
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
-	err = models.SharedHTTPLocationDAO.UpdateLocation(tx, req.LocationId, req.Name, req.Pattern, req.Description, req.IsOn, req.IsBreak, req.CondsJSON, req.Domains)
+	err = models.SharedHTTPLocationDAO.UpdateLocation(tx, req.LocationId, req.Name, req.Pattern, req.Description, req.IsOn, req.IsBreak, req.CondsJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -51,17 +50,17 @@ func (this *HTTPLocationService) UpdateHTTPLocation(ctx context.Context, req *pb
 	return this.Success()
 }
 
-// FindEnabledHTTPLocationConfig 查找路由规则配置
+// FindEnabledHTTPLocationConfig 查找路径规则配置
 func (this *HTTPLocationService) FindEnabledHTTPLocationConfig(ctx context.Context, req *pb.FindEnabledHTTPLocationConfigRequest) (*pb.FindEnabledHTTPLocationConfigResponse, error) {
 	// 校验请求
-	_, err := this.ValidateAdmin(ctx)
+	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
 	if err != nil {
 		return nil, err
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
-	config, err := models.SharedHTTPLocationDAO.ComposeLocationConfig(tx, req.LocationId, false, nil, nil)
+	config, err := models.SharedHTTPLocationDAO.ComposeLocationConfig(tx, req.LocationId)
 	if err != nil {
 		return nil, err
 	}
@@ -72,15 +71,15 @@ func (this *HTTPLocationService) FindEnabledHTTPLocationConfig(ctx context.Conte
 	return &pb.FindEnabledHTTPLocationConfigResponse{LocationJSON: configJSON}, nil
 }
 
-// DeleteHTTPLocation 删除路由规则
+// DeleteHTTPLocation 删除路径规则
 func (this *HTTPLocationService) DeleteHTTPLocation(ctx context.Context, req *pb.DeleteHTTPLocationRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, err := this.ValidateAdmin(ctx)
+	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
 	if err != nil {
 		return nil, err
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
 	err = models.SharedHTTPLocationDAO.DisableHTTPLocation(tx, req.LocationId)
 	if err != nil {
@@ -92,12 +91,12 @@ func (this *HTTPLocationService) DeleteHTTPLocation(ctx context.Context, req *pb
 // FindAndInitHTTPLocationReverseProxyConfig 查找反向代理设置
 func (this *HTTPLocationService) FindAndInitHTTPLocationReverseProxyConfig(ctx context.Context, req *pb.FindAndInitHTTPLocationReverseProxyConfigRequest) (*pb.FindAndInitHTTPLocationReverseProxyConfigResponse, error) {
 	// 校验请求
-	adminId, userId, err := this.ValidateAdminAndUser(ctx, true)
+	adminId, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
 	reverseProxyRef, err := models.SharedHTTPLocationDAO.FindLocationReverseProxy(tx, req.LocationId)
 	if err != nil {
@@ -122,7 +121,7 @@ func (this *HTTPLocationService) FindAndInitHTTPLocationReverseProxyConfig(ctx c
 		}
 	}
 
-	reverseProxyConfig, err := models.SharedReverseProxyDAO.ComposeReverseProxyConfig(tx, reverseProxyRef.ReverseProxyId, nil, nil)
+	reverseProxyConfig, err := models.SharedReverseProxyDAO.ComposeReverseProxyConfig(tx, reverseProxyRef.ReverseProxyId)
 	if err != nil {
 		return nil, err
 	}
@@ -145,12 +144,12 @@ func (this *HTTPLocationService) FindAndInitHTTPLocationReverseProxyConfig(ctx c
 // FindAndInitHTTPLocationWebConfig 初始化Web设置
 func (this *HTTPLocationService) FindAndInitHTTPLocationWebConfig(ctx context.Context, req *pb.FindAndInitHTTPLocationWebConfigRequest) (*pb.FindAndInitHTTPLocationWebConfigResponse, error) {
 	// 校验请求
-	adminId, userId, err := this.ValidateAdminAndUser(ctx, true)
+	adminId, userId, err := this.ValidateAdminAndUser(ctx, 0, 0)
 	if err != nil {
 		return nil, rpcutils.Wrap("ValidateRequest()", err)
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
 	webId, err := models.SharedHTTPLocationDAO.FindLocationWebId(tx, req.LocationId)
 	if err != nil {
@@ -168,7 +167,7 @@ func (this *HTTPLocationService) FindAndInitHTTPLocationWebConfig(ctx context.Co
 		}
 	}
 
-	config, err := models.SharedHTTPWebDAO.ComposeWebConfig(tx, webId, true, false, nil, nil)
+	config, err := models.SharedHTTPWebDAO.ComposeWebConfig(tx, webId)
 	if err != nil {
 		return nil, rpcutils.Wrap("ComposeWebConfig()", err)
 	}
@@ -184,12 +183,12 @@ func (this *HTTPLocationService) FindAndInitHTTPLocationWebConfig(ctx context.Co
 // UpdateHTTPLocationReverseProxy 修改反向代理设置
 func (this *HTTPLocationService) UpdateHTTPLocationReverseProxy(ctx context.Context, req *pb.UpdateHTTPLocationReverseProxyRequest) (*pb.RPCSuccess, error) {
 	// 校验请求
-	_, err := this.ValidateAdmin(ctx)
+	_, _, err := rpcutils.ValidateRequest(ctx, rpcutils.UserTypeAdmin)
 	if err != nil {
 		return nil, err
 	}
 
-	var tx = this.NullTx()
+	tx := this.NullTx()
 
 	err = models.SharedHTTPLocationDAO.UpdateLocationReverseProxy(tx, req.LocationId, req.ReverseProxyJSON)
 	if err != nil {

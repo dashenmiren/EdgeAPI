@@ -1,10 +1,9 @@
 package models
 
 import (
-	"testing"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestSysSettingDAO_UpdateSetting(t *testing.T) {
@@ -42,9 +41,4 @@ func TestSysSettingDAO_CompareInt64Setting(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log("result:", i)
-}
-
-func TestSysSettingDAO_ReadProductName(t *testing.T) {
-	var tx *dbs.Tx
-	t.Log(NewSysSettingDAO().ReadProductName(tx))
 }

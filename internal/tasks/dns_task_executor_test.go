@@ -1,20 +1,15 @@
-//go:build !plus
-
-package tasks_test
+package tasks
 
 import (
-	"testing"
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestDNSTaskExecutor_Loop(t *testing.T) {
 	dbs.NotifyReady()
 
-	var task = tasks.NewDNSTaskExecutor(10 * time.Second)
-	err := task.Loop()
+	executor := NewDNSTaskExecutor()
+	err := executor.Loop()
 	if err != nil {
 		t.Fatal(err)
 	}

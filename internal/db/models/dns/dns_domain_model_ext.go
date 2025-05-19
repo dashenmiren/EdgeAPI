@@ -2,17 +2,16 @@ package dns
 
 import (
 	"encoding/json"
-
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
 )
 
 // DecodeRoutes 获取所有的线路
 func (this *DNSDomain) DecodeRoutes() ([]*dnstypes.Route, error) {
-	if len(this.Routes) == 0 {
+	if len(this.Routes) == 0 || this.Routes == "null" {
 		return nil, nil
 	}
 	result := []*dnstypes.Route{}
-	err := json.Unmarshal(this.Routes, &result)
+	err := json.Unmarshal([]byte(this.Routes), &result)
 	if err != nil {
 		return nil, err
 	}
@@ -36,11 +35,11 @@ func (this *DNSDomain) ContainsRouteCode(route string) (bool, error) {
 // DecodeRecords 获取所有的记录
 func (this *DNSDomain) DecodeRecords() ([]*dnstypes.Record, error) {
 	records := this.Records
-	if len(records) == 0 {
+	if len(records) == 0 || records == "null" {
 		return nil, nil
 	}
 	result := []*dnstypes.Record{}
-	err := json.Unmarshal(records, &result)
+	err := json.Unmarshal([]byte(records), &result)
 	if err != nil {
 		return nil, err
 	}

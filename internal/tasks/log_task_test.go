@@ -1,29 +1,26 @@
-package tasks_test
+package tasks
 
 import (
-	"testing"
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/tasks"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
-func TestLogTask_LoopClean(t *testing.T) {
+func TestLogTask_loopClean(t *testing.T) {
 	dbs.NotifyReady()
 
-	var task = tasks.NewLogTask(24*time.Hour, 1*time.Minute)
-	err := task.LoopClean()
+	task := NewLogTask()
+	err := task.loopClean(5)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log("ok")
 }
 
-func TestLogTask_LoopMonitor(t *testing.T) {
+func TestLogTask_loopMonitor(t *testing.T) {
 	dbs.NotifyReady()
 
-	var task = tasks.NewLogTask(24*time.Hour, 1*time.Minute)
-	err := task.LoopMonitor()
+	task := NewLogTask()
+	err := task.loopMonitor(10)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,10 +1,9 @@
 package models
 
 import (
-	"testing"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/dbs"
+	"testing"
 )
 
 func TestHTTPFirewallRuleGroupDAO_FindRuleGroupIdWithRuleSetId(t *testing.T) {

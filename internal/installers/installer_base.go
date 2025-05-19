@@ -2,26 +2,22 @@ package installers
 
 import (
 	"errors"
-	"fmt"
+	"github.com/iwind/TeaGo/Tea"
+	stringutil "github.com/iwind/TeaGo/utils/string"
+	"golang.org/x/crypto/ssh"
 	"net"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
-	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
-	"github.com/iwind/TeaGo/Tea"
-	stringutil "github.com/iwind/TeaGo/utils/string"
-	"golang.org/x/crypto/ssh"
 )
 
 type BaseInstaller struct {
 	client *SSHClient
 }
 
-// Login 登录SSH服务
+// 登录SSH服务
 func (this *BaseInstaller) Login(credentials *Credentials) error {
 	var hostKeyCallback ssh.HostKeyCallback = nil
 
@@ -44,10 +40,10 @@ func (this *BaseInstaller) Login(credentials *Credentials) error {
 	}
 
 	// 认证
-	var methods = []ssh.AuthMethod{}
-	if credentials.Method == "user" {
+	methods := []ssh.AuthMethod{}
+	if len(credentials.Password) > 0 {
 		{
-			var authMethod = ssh.Password(credentials.Password)
+			authMethod := ssh.Password(credentials.Password)
 			methods = append(methods, authMethod)
 		}
 
@@ -60,35 +56,24 @@ func (this *BaseInstaller) Login(credentials *Credentials) error {
 			})
 			methods = append(methods, authMethod)
 		}
-	} else if credentials.Method == "privateKey" {
-		var signer ssh.Signer
-		var err error
-		if len(credentials.Passphrase) > 0 {
-			signer, err = ssh.ParsePrivateKeyWithPassphrase([]byte(credentials.PrivateKey), []byte(credentials.Passphrase))
-		} else {
-			signer, err = ssh.ParsePrivateKey([]byte(credentials.PrivateKey))
-		}
+	} else {
+		signer, err := ssh.ParsePrivateKey([]byte(credentials.PrivateKey))
 		if err != nil {
-			return fmt.Errorf("parse private key: %w", err)
+			return errors.New("parse private key: " + err.Error())
 		}
 		authMethod := ssh.PublicKeys(signer)
 		methods = append(methods, authMethod)
-	} else {
-		return errors.New("invalid method '" + credentials.Method + "'")
 	}
 
 	// SSH客户端
-	if len(credentials.Username) == 0 {
-		credentials.Username = "root"
-	}
-	var config = &ssh.ClientConfig{
+	config := &ssh.ClientConfig{
 		User:            credentials.Username,
 		Auth:            methods,
 		HostKeyCallback: hostKeyCallback,
 		Timeout:         5 * time.Second, // TODO 后期可以设置这个超时时间
 	}
 
-	sshClient, err := ssh.Dial("tcp", configutils.QuoteIP(credentials.Host)+":"+strconv.Itoa(credentials.Port), config)
+	sshClient, err := ssh.Dial("tcp", credentials.Host+":"+strconv.Itoa(credentials.Port), config)
 	if err != nil {
 		return err
 	}
@@ -96,17 +81,11 @@ func (this *BaseInstaller) Login(credentials *Credentials) error {
 	if err != nil {
 		return err
 	}
-
-	if credentials.Sudo {
-		client.Sudo(credentials.Password)
-	}
-
 	this.client = client
-
 	return nil
 }
 
-// Close 关闭SSH服务
+// 关闭SSH服务
 func (this *BaseInstaller) Close() error {
 	if this.client != nil {
 		return this.client.Close()
@@ -115,7 +94,7 @@ func (this *BaseInstaller) Close() error {
 	return nil
 }
 
-// LookupLatestInstaller 查找最新的版本的文件
+// 查找最新的版本的文件
 func (this *BaseInstaller) LookupLatestInstaller(filePrefix string) (string, error) {
 	matches, err := filepath.Glob(Tea.Root + Tea.DS + "deploy" + Tea.DS + "*.zip")
 	if err != nil {
@@ -127,14 +106,14 @@ func (this *BaseInstaller) LookupLatestInstaller(filePrefix string) (string, err
 		return "", err
 	}
 
-	var lastVersion = ""
-	var result = ""
+	lastVersion := ""
+	result := ""
 	for _, match := range matches {
-		var baseName = filepath.Base(match)
+		baseName := filepath.Base(match)
 		if !pattern.MatchString(baseName) {
 			continue
 		}
-		var m = pattern.FindStringSubmatch(baseName)
+		m := pattern.FindStringSubmatch(baseName)
 		if len(m) < 2 {
 			continue
 		}
@@ -147,12 +126,15 @@ func (this *BaseInstaller) LookupLatestInstaller(filePrefix string) (string, err
 	return result, nil
 }
 
-// InstallHelper 上传安装助手
-func (this *BaseInstaller) InstallHelper(targetDir string, role nodeconfigs.NodeRole) (env *Env, err error) {
-	var uname = this.uname()
+// 上传安装助手
+func (this *BaseInstaller) InstallHelper(targetDir string) (env *Env, err error) {
+	uname, _, err := this.client.Exec("uname -a")
+	if err != nil {
+		return env, err
+	}
 
-	var osName string
-	var archName string
+	osName := ""
+	archName := ""
 	if strings.Contains(uname, "Darwin") {
 		osName = "darwin"
 	} else if strings.Contains(uname, "Linux") {
@@ -176,56 +158,18 @@ func (this *BaseInstaller) InstallHelper(targetDir string, role nodeconfigs.Node
 		archName = "386"
 	}
 
-	var exeName = "edge-installer-helper-" + osName + "-" + archName
-	switch role {
-	case nodeconfigs.NodeRoleDNS:
-		exeName = "edge-installer-dns-helper-" + osName + "-" + archName
-	}
-	var exePath = Tea.Root + "/installers/" + exeName
+	exeName := "edge-installer-helper-" + osName + "-" + archName
+	exePath := Tea.Root + "/installers/" + exeName
 
-	var realHelperPath = ""
-
-	var firstCopyErr error
-	for _, path := range []string{
-		targetDir + "/" + exeName,
-		this.client.UserHome() + "/" + exeName,
-		"/tmp/" + exeName,
-	} {
-		err = this.client.Copy(exePath, path, 0777)
-		if err != nil {
-			if firstCopyErr == nil {
-				firstCopyErr = err
-			}
-		} else {
-			err = nil
-			firstCopyErr = nil
-			realHelperPath = path
-			break
-		}
-	}
-	if firstCopyErr != nil {
-		return env, errors.New("copy '" + exeName + "' to '" + targetDir + "' failed: " + firstCopyErr.Error())
+	err = this.client.Copy(exePath, targetDir+"/"+exeName, 0777)
+	if err != nil {
+		return env, errors.New("copy '" + exeName + "' to '" + targetDir + "' failed: " + err.Error())
 	}
 
 	env = &Env{
 		OS:         osName,
 		Arch:       archName,
-		HelperPath: realHelperPath,
+		HelperName: exeName,
 	}
 	return env, nil
-}
-
-func (this *BaseInstaller) uname() (uname string) {
-	var unameRetries = 3
-
-	for i := 0; i < unameRetries; i++ {
-		for _, unameExe := range []string{"uname", "/bin/uname", "/usr/bin/uname"} {
-			uname, _, _ = this.client.Exec(unameExe + " -a")
-			if len(uname) > 0 {
-				return
-			}
-		}
-	}
-
-	return "x86_64 GNU/Linux"
 }

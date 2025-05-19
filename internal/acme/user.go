@@ -3,7 +3,6 @@ package acme
 import (
 	"crypto"
 	"encoding/json"
-
 	"github.com/go-acme/lego/v4/registration"
 )
 

@@ -2,18 +2,16 @@ package models
 
 import (
 	"encoding/json"
-	"strconv"
-	"strings"
-
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/dashenmiren/EdgeAPI/internal/utils"
-	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeAPI/internal/utils"
+	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/maps"
 	"github.com/iwind/TeaGo/rands"
 	"github.com/iwind/TeaGo/types"
+	"strconv"
 )
 
 const (
@@ -52,17 +50,12 @@ func (this *UserNodeDAO) EnableUserNode(tx *dbs.Tx, id uint32) error {
 }
 
 // DisableUserNode 禁用条目
-func (this *UserNodeDAO) DisableUserNode(tx *dbs.Tx, nodeId int64) error {
+func (this *UserNodeDAO) DisableUserNode(tx *dbs.Tx, id int64) error {
 	_, err := this.Query(tx).
-		Pk(nodeId).
+		Pk(id).
 		Set("state", UserNodeStateDisabled).
 		Update()
-	if err != nil {
-		return err
-	}
-
-	// 删除运行日志
-	return SharedNodeLogDAO.DeleteNodeLogs(tx, nodeconfigs.NodeRoleUser, nodeId)
+	return err
 }
 
 // FindEnabledUserNode 查找启用中的条目
@@ -100,14 +93,6 @@ func (this *UserNodeDAO) FindAllEnabledUserNodes(tx *dbs.Tx) (result []*UserNode
 func (this *UserNodeDAO) CountAllEnabledUserNodes(tx *dbs.Tx) (int64, error) {
 	return this.Query(tx).
 		State(UserNodeStateEnabled).
-		Count()
-}
-
-// CountAllEnabledAndOnUserNodes 计算启用的用户节点数量
-func (this *UserNodeDAO) CountAllEnabledAndOnUserNodes(tx *dbs.Tx) (int64, error) {
-	return this.Query(tx).
-		State(UserNodeStateEnabled).
-		Attr("isOn", true).
 		Count()
 }
 
@@ -163,7 +148,7 @@ func (this *UserNodeDAO) CreateUserNode(tx *dbs.Tx, name string, description str
 		return
 	}
 
-	var op = NewUserNodeOperator()
+	op := NewUserNodeOperator()
 	op.IsOn = isOn
 	op.UniqueId = uniqueId
 	op.Secret = secret
@@ -195,7 +180,7 @@ func (this *UserNodeDAO) UpdateUserNode(tx *dbs.Tx, nodeId int64, name string, d
 		return errors.New("invalid nodeId")
 	}
 
-	var op = NewUserNodeOperator()
+	op := NewUserNodeOperator()
 	op.Id = nodeId
 	op.Name = name
 	op.Description = description
@@ -260,19 +245,13 @@ func (this *UserNodeDAO) GenUniqueId(tx *dbs.Tx) (string, error) {
 }
 
 // UpdateNodeStatus 更改节点状态
-func (this *UserNodeDAO) UpdateNodeStatus(tx *dbs.Tx, nodeId int64, nodeStatus *nodeconfigs.NodeStatus) error {
-	if nodeStatus == nil {
+func (this *UserNodeDAO) UpdateNodeStatus(tx *dbs.Tx, nodeId int64, statusJSON []byte) error {
+	if len(statusJSON) == 0 {
 		return nil
 	}
-
-	nodeStatusJSON, err := json.Marshal(nodeStatus)
-	if err != nil {
-		return err
-	}
-
-	_, err = this.Query(tx).
+	_, err := this.Query(tx).
 		Pk(nodeId).
-		Set("status", nodeStatusJSON).
+		Set("status", string(statusJSON)).
 		Update()
 	return err
 }
@@ -281,52 +260,8 @@ func (this *UserNodeDAO) UpdateNodeStatus(tx *dbs.Tx, nodeId int64, nodeStatus *
 func (this *UserNodeDAO) CountAllLowerVersionNodes(tx *dbs.Tx, version string) (int64, error) {
 	return this.Query(tx).
 		State(UserNodeStateEnabled).
-		Attr("isOn", true).
 		Where("status IS NOT NULL").
 		Where("(JSON_EXTRACT(status, '$.buildVersionCode') IS NULL OR JSON_EXTRACT(status, '$.buildVersionCode')<:version)").
 		Param("version", utils.VersionToLong(version)).
 		Count()
-}
-
-// CountAllEnabledAndOnOfflineNodes 计算离线节点数量
-func (this *UserNodeDAO) CountAllEnabledAndOnOfflineNodes(tx *dbs.Tx) (int64, error) {
-	return this.Query(tx).
-		State(UserNodeStateEnabled).
-		Attr("isOn", true).
-		Where("(status IS NULL OR JSON_EXTRACT(status, '$.updatedAt')<UNIX_TIMESTAMP()-60)").
-		Count()
-}
-
-// CountAllEnabledUserNodesWithSSLPolicyIds 计算使用SSL策略的所有用户节点数量
-func (this *UserNodeDAO) CountAllEnabledUserNodesWithSSLPolicyIds(tx *dbs.Tx, sslPolicyIds []int64) (count int64, err error) {
-	if len(sslPolicyIds) == 0 {
-		return
-	}
-	var policyStringIds = []string{}
-	for _, policyId := range sslPolicyIds {
-		policyStringIds = append(policyStringIds, strconv.FormatInt(policyId, 10))
-	}
-	return this.Query(tx).
-		State(UserNodeStateEnabled).
-		Where("(FIND_IN_SET(JSON_EXTRACT(https, '$.sslPolicyRef.sslPolicyId'), :policyIds)) ").
-		Param("policyIds", strings.Join(policyStringIds, ",")).
-		Count()
-}
-
-// FindUserNodeAccessAddr 获取用户节点访问地址
-func (this *UserNodeDAO) FindUserNodeAccessAddr(tx *dbs.Tx) (string, error) {
-	nodes, err := this.ListEnabledUserNodes(tx, 0, 100)
-	if err != nil {
-		return "", err
-	}
-	for _, node := range nodes {
-		addrs, err := node.DecodeAccessAddrStrings()
-		if err != nil {
-			continue
-		}
-		if len(addrs) > 0 {
-			return addrs[0], nil
-		}
-	}
-	return "", nil
 }

@@ -1,13 +1,11 @@
 package models
 
 import (
-	"time"
-
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/rands"
+	"time"
 )
 
 type APIAccessTokenDAO dbs.DAO
@@ -31,23 +29,10 @@ func init() {
 	})
 }
 
-// GenerateAccessToken 生成AccessToken
-func (this *APIAccessTokenDAO) GenerateAccessToken(tx *dbs.Tx, adminId int64, userId int64) (token string, expiresAt int64, err error) {
-	if adminId <= 0 && userId <= 0 {
-		err = errors.New("either 'adminId' or 'userId' should not be zero")
-		return
-	}
-
-	if adminId > 0 {
-		userId = 0
-	}
-	if userId > 0 {
-		adminId = 0
-	}
-
+// 生成AccessToken
+func (this *APIAccessTokenDAO) GenerateAccessToken(tx *dbs.Tx, userId int64) (token string, expiresAt int64, err error) {
 	// 查询以前的
 	accessToken, err := this.Query(tx).
-		Attr("adminId", adminId).
 		Attr("userId", userId).
 		Find()
 	if err != nil {
@@ -57,13 +42,12 @@ func (this *APIAccessTokenDAO) GenerateAccessToken(tx *dbs.Tx, adminId int64, us
 	token = rands.String(128) // TODO 增强安全性，将来使用 base64_encode(encrypt(salt+random)) 算法来代替
 	expiresAt = time.Now().Unix() + 7200
 
-	var op = NewAPIAccessTokenOperator()
+	op := NewAPIAccessTokenOperator()
 
 	if accessToken != nil {
 		op.Id = accessToken.(*APIAccessToken).Id
 	}
 
-	op.AdminId = adminId
 	op.UserId = userId
 	op.Token = token
 	op.CreatedAt = time.Now().Unix()
@@ -72,7 +56,7 @@ func (this *APIAccessTokenDAO) GenerateAccessToken(tx *dbs.Tx, adminId int64, us
 	return
 }
 
-// FindAccessToken 查找AccessToken
+// 查找AccessToken
 func (this *APIAccessTokenDAO) FindAccessToken(tx *dbs.Tx, token string) (*APIAccessToken, error) {
 	one, err := this.Query(tx).
 		Attr("token", token).
@@ -81,17 +65,4 @@ func (this *APIAccessTokenDAO) FindAccessToken(tx *dbs.Tx, token string) (*APIAc
 		return nil, err
 	}
 	return one.(*APIAccessToken), nil
-}
-
-// DeleteAccessTokens 删除用户的令牌
-func (this *APIAccessTokenDAO) DeleteAccessTokens(tx *dbs.Tx, adminId int64, userId int64) error {
-	var query = this.Query(tx)
-	if adminId > 0 {
-		query.Attr("adminId", adminId)
-	} else if userId > 0 {
-		query.Attr("userId", userId)
-	} else {
-		return nil
-	}
-	return query.DeleteQuickly()
 }

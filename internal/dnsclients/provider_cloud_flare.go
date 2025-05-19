@@ -1,4 +1,4 @@
-// Copyright 2021 GoEdge CDN goedge.cdn@gmail.com. All rights reserved.
+// Copyright 2021 Liuxiangchao iwind.liu@gmail.com. All rights reserved.
 
 package dnsclients
 
@@ -6,21 +6,18 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
+	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/cloudflare"
+	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/iwind/TeaGo/maps"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/cloudflare"
-	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
-	"github.com/iwind/TeaGo/maps"
-	"github.com/iwind/TeaGo/types"
 )
 
 const CloudFlareAPIEndpoint = "https://api.cloudflare.com/client/v4/"
@@ -32,16 +29,11 @@ var cloudFlareHTTPClient = &http.Client{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
-		/**Proxy: func(req *http.Request) (*url.URL, error) {
-			return url.Parse("socks5://127.0.0.1:7890")
-		},**/
 	},
 }
 
 type CloudFlareProvider struct {
 	BaseProvider
-
-	ProviderId int64
 
 	apiKey string // API密钥
 	email  string // 账号邮箱
@@ -65,37 +57,6 @@ func (this *CloudFlareProvider) Auth(params maps.Map) error {
 	this.zoneMap = map[string]string{}
 
 	return nil
-}
-
-// MaskParams 对参数进行掩码
-func (this *CloudFlareProvider) MaskParams(params maps.Map) {
-	if params == nil {
-		return
-	}
-	params["apiKey"] = MaskString(params.GetString("apiKey"))
-}
-
-// GetDomains 获取所有域名列表
-func (this *CloudFlareProvider) GetDomains() (domains []string, err error) {
-	for page := 1; page <= 500; page++ {
-		var resp = new(cloudflare.ZonesResponse)
-		err = this.doAPI(http.MethodGet, "zones", map[string]string{
-			"per_page": "50",
-			"page":     types.String(page),
-		}, nil, resp)
-		if err != nil {
-			return nil, err
-		}
-		if len(resp.Result) == 0 {
-			break
-		}
-
-		for _, zone := range resp.Result {
-			domains = append(domains, zone.Name)
-		}
-	}
-
-	return
 }
 
 // GetRecords 获取域名解析记录列表
@@ -155,7 +116,7 @@ func (this *CloudFlareProvider) QueryRecord(domain string, name string, recordTy
 		return nil, err
 	}
 
-	var resp = new(cloudflare.GetDNSRecordsResponse)
+	resp := new(cloudflare.GetDNSRecordsResponse)
 	err = this.doAPI(http.MethodGet, "zones/"+zoneId+"/dns_records", map[string]string{
 		"per_page": "100",
 		"name":     name + "." + domain,
@@ -168,7 +129,7 @@ func (this *CloudFlareProvider) QueryRecord(domain string, name string, recordTy
 		return nil, nil
 	}
 
-	var record = resp.Result[0]
+	record := resp.Result[0]
 
 	// 修正Record
 	if record.Type == dnstypes.RecordTypeCNAME && !strings.HasSuffix(record.Content, ".") {
@@ -182,73 +143,26 @@ func (this *CloudFlareProvider) QueryRecord(domain string, name string, recordTy
 		Name:  record.Name,
 		Type:  record.Type,
 		Value: record.Content,
-		TTL:   types.Int32(record.Ttl),
 		Route: CloudFlareDefaultRoute,
 	}, nil
-}
-
-// QueryRecords 查询多个记录
-func (this *CloudFlareProvider) QueryRecords(domain string, name string, recordType dnstypes.RecordType) (records []*dnstypes.Record, err error) {
-	zoneId, err := this.findZoneIdWithDomain(domain)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp = new(cloudflare.GetDNSRecordsResponse)
-	err = this.doAPI(http.MethodGet, "zones/"+zoneId+"/dns_records", map[string]string{
-		"per_page": "100",
-		"name":     name + "." + domain,
-		"type":     recordType,
-	}, nil, resp)
-	if err != nil {
-		return nil, err
-	}
-	if len(resp.Result) == 0 {
-		return nil, nil
-	}
-
-	for _, record := range resp.Result {
-		// 修正Record
-		if record.Type == dnstypes.RecordTypeCNAME && !strings.HasSuffix(record.Content, ".") {
-			record.Content += "."
-		}
-
-		record.Name = strings.TrimSuffix(record.Name, "."+domain)
-
-		records = append(records, &dnstypes.Record{
-			Id:    record.Id,
-			Name:  record.Name,
-			Type:  record.Type,
-			Value: record.Content,
-			TTL:   types.Int32(record.Ttl),
-			Route: CloudFlareDefaultRoute,
-		})
-	}
-	return records, nil
 }
 
 // AddRecord 设置记录
 func (this *CloudFlareProvider) AddRecord(domain string, newRecord *dnstypes.Record) error {
 	zoneId, err := this.findZoneIdWithDomain(domain)
 	if err != nil {
-		return this.WrapError(err, domain, newRecord)
+		return err
 	}
 
 	resp := new(cloudflare.CreateDNSRecordResponse)
-
-	var ttl = newRecord.TTL
-	if ttl <= 0 {
-		ttl = 1 // 自动默认
-	}
-
 	err = this.doAPI(http.MethodPost, "zones/"+zoneId+"/dns_records", nil, maps.Map{
 		"type":    newRecord.Type,
 		"name":    newRecord.Name + "." + domain,
 		"content": newRecord.Value,
-		"ttl":     ttl,
+		"ttl":     1,
 	}, resp)
 	if err != nil {
-		return this.WrapError(err, domain, newRecord)
+		return err
 	}
 	return nil
 }
@@ -257,12 +171,7 @@ func (this *CloudFlareProvider) AddRecord(domain string, newRecord *dnstypes.Rec
 func (this *CloudFlareProvider) UpdateRecord(domain string, record *dnstypes.Record, newRecord *dnstypes.Record) error {
 	zoneId, err := this.findZoneIdWithDomain(domain)
 	if err != nil {
-		return this.WrapError(err, domain, newRecord)
-	}
-
-	var ttl = newRecord.TTL
-	if ttl <= 0 {
-		ttl = 1 // 自动默认
+		return err
 	}
 
 	resp := new(cloudflare.UpdateDNSRecordResponse)
@@ -270,7 +179,7 @@ func (this *CloudFlareProvider) UpdateRecord(domain string, record *dnstypes.Rec
 		"type":    newRecord.Type,
 		"name":    newRecord.Name + "." + domain,
 		"content": newRecord.Value,
-		"ttl":     ttl,
+		"ttl":     1,
 	}, resp)
 }
 
@@ -278,13 +187,13 @@ func (this *CloudFlareProvider) UpdateRecord(domain string, record *dnstypes.Rec
 func (this *CloudFlareProvider) DeleteRecord(domain string, record *dnstypes.Record) error {
 	zoneId, err := this.findZoneIdWithDomain(domain)
 	if err != nil {
-		return this.WrapError(err, domain, record)
+		return err
 	}
 
 	resp := new(cloudflare.DeleteDNSRecordResponse)
 	err = this.doAPI(http.MethodDelete, "zones/"+zoneId+"/dns_records/"+record.Id, map[string]string{}, nil, resp)
 	if err != nil {
-		return this.WrapError(err, domain, record)
+		return err
 	}
 	return nil
 }
@@ -320,7 +229,6 @@ func (this *CloudFlareProvider) doAPI(method string, apiPath string, args map[st
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", teaconst.ProductName+"/"+teaconst.Version)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Auth-Key", this.apiKey)
 	req.Header.Set("x-Auth-Email", this.email)
@@ -332,7 +240,7 @@ func (this *CloudFlareProvider) doAPI(method string, apiPath string, args map[st
 		_ = resp.Body.Close()
 	}()
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -341,13 +249,13 @@ func (this *CloudFlareProvider) doAPI(method string, apiPath string, args map[st
 		return errors.New("invalid response status '" + strconv.Itoa(resp.StatusCode) + "', response '" + string(data) + "'")
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("response error: " + string(data))
-	}
-
 	err = json.Unmarshal(data, respPtr)
 	if err != nil {
-		return fmt.Errorf("decode json failed: %w, response text: %s", err, string(data))
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("response error: " + string(data))
 	}
 
 	return nil

@@ -1,18 +1,14 @@
 package acme
 
 import (
-	"fmt"
-	"io"
-	"log"
-
-	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
-	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/TeaOSLab/EdgeAPI/internal/errors"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/lego"
 	acmelog "github.com/go-acme/lego/v4/log"
 	"github.com/go-acme/lego/v4/registration"
-	"github.com/iwind/TeaGo/Tea"
+	"io/ioutil"
+	"log"
 )
 
 type Request struct {
@@ -37,15 +33,6 @@ func (this *Request) OnAuth(onAuth AuthCallback) {
 }
 
 func (this *Request) Run() (certData []byte, keyData []byte, err error) {
-	if this.task.Provider == nil {
-		err = errors.New("provider should not be nil")
-		return
-	}
-	if this.task.Provider.RequireEAB && this.task.Account == nil {
-		err = errors.New("account should not be nil when provider require EAB")
-		return
-	}
-
 	switch this.task.AuthType {
 	case AuthTypeDNS:
 		return this.runDNS()
@@ -59,9 +46,7 @@ func (this *Request) Run() (certData []byte, keyData []byte, err error) {
 
 func (this *Request) runDNS() (certData []byte, keyData []byte, err error) {
 	if !this.debug {
-		if !Tea.IsTesting() {
-			acmelog.Logger = log.New(io.Discard, "", log.LstdFlags)
-		}
+		acmelog.Logger = log.New(ioutil.Discard, "", log.LstdFlags)
 	}
 
 	if this.task.User == nil {
@@ -81,10 +66,8 @@ func (this *Request) runDNS() (certData []byte, keyData []byte, err error) {
 		return
 	}
 
-	var config = lego.NewConfig(this.task.User)
+	config := lego.NewConfig(this.task.User)
 	config.Certificate.KeyType = certcrypto.RSA2048
-	config.CADirURL = this.task.Provider.APIURL
-	config.UserAgent = teaconst.ProductName + "/" + teaconst.Version
 
 	client, err := lego.NewClient(config)
 	if err != nil {
@@ -92,51 +75,36 @@ func (this *Request) runDNS() (certData []byte, keyData []byte, err error) {
 	}
 
 	// 注册用户
-	var resource = this.task.User.GetRegistration()
+	resource := this.task.User.GetRegistration()
 	if resource != nil {
-		_, err = client.Registration.QueryRegistration()
+		resource, err = client.Registration.QueryRegistration()
 		if err != nil {
 			return nil, nil, err
 		}
 	} else {
-		if this.task.Provider.RequireEAB {
-			resource, err = client.Registration.RegisterWithExternalAccountBinding(registration.RegisterEABOptions{
-				TermsOfServiceAgreed: true,
-				Kid:                  this.task.Account.EABKid,
-				HmacEncoded:          this.task.Account.EABKey,
-			})
-			if err != nil {
-				return nil, nil, fmt.Errorf("register user failed: %w", err)
-			}
-			err = this.task.User.Register(resource)
-			if err != nil {
-				return nil, nil, err
-			}
-		} else {
-			resource, err = client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
-			if err != nil {
-				return nil, nil, err
-			}
-			err = this.task.User.Register(resource)
-			if err != nil {
-				return nil, nil, err
-			}
+		resource, err := client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+		if err != nil {
+			return nil, nil, err
+		}
+		err = this.task.User.Register(resource)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 
-	err = client.Challenge.SetDNS01Provider(NewDNSProvider(this.task.DNSProvider, this.task.DNSDomain))
+	err = client.Challenge.SetDNS01Provider(NewDNSProvider(this.task.DNSProvider))
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// 申请证书
-	var request = certificate.ObtainRequest{
+	request := certificate.ObtainRequest{
 		Domains: this.task.Domains,
 		Bundle:  true,
 	}
 	certResource, err := client.Certificate.Obtain(request)
 	if err != nil {
-		return nil, nil, fmt.Errorf("obtain cert failed: %w", err)
+		return nil, nil, err
 	}
 
 	return certResource.Certificate, certResource.PrivateKey, nil
@@ -144,9 +112,7 @@ func (this *Request) runDNS() (certData []byte, keyData []byte, err error) {
 
 func (this *Request) runHTTP() (certData []byte, keyData []byte, err error) {
 	if !this.debug {
-		if !Tea.IsTesting() {
-			acmelog.Logger = log.New(io.Discard, "", log.LstdFlags)
-		}
+		acmelog.Logger = log.New(ioutil.Discard, "", log.LstdFlags)
 	}
 
 	if this.task.User == nil {
@@ -154,10 +120,8 @@ func (this *Request) runHTTP() (certData []byte, keyData []byte, err error) {
 		return
 	}
 
-	var config = lego.NewConfig(this.task.User)
+	config := lego.NewConfig(this.task.User)
 	config.Certificate.KeyType = certcrypto.RSA2048
-	config.CADirURL = this.task.Provider.APIURL
-	config.UserAgent = teaconst.ProductName + "/" + teaconst.Version
 
 	client, err := lego.NewClient(config)
 	if err != nil {
@@ -165,35 +129,20 @@ func (this *Request) runHTTP() (certData []byte, keyData []byte, err error) {
 	}
 
 	// 注册用户
-	var resource = this.task.User.GetRegistration()
+	resource := this.task.User.GetRegistration()
 	if resource != nil {
-		_, err = client.Registration.QueryRegistration()
+		resource, err = client.Registration.QueryRegistration()
 		if err != nil {
 			return nil, nil, err
 		}
 	} else {
-		if this.task.Provider.RequireEAB {
-			resource, err = client.Registration.RegisterWithExternalAccountBinding(registration.RegisterEABOptions{
-				TermsOfServiceAgreed: true,
-				Kid:                  this.task.Account.EABKid,
-				HmacEncoded:          this.task.Account.EABKey,
-			})
-			if err != nil {
-				return nil, nil, fmt.Errorf("register user failed: %w", err)
-			}
-			err = this.task.User.Register(resource)
-			if err != nil {
-				return nil, nil, err
-			}
-		} else {
-			resource, err = client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
-			if err != nil {
-				return nil, nil, err
-			}
-			err = this.task.User.Register(resource)
-			if err != nil {
-				return nil, nil, err
-			}
+		resource, err := client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+		if err != nil {
+			return nil, nil, err
+		}
+		err = this.task.User.Register(resource)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -203,7 +152,7 @@ func (this *Request) runHTTP() (certData []byte, keyData []byte, err error) {
 	}
 
 	// 申请证书
-	var request = certificate.ObtainRequest{
+	request := certificate.ObtainRequest{
 		Domains: this.task.Domains,
 		Bundle:  true,
 	}
