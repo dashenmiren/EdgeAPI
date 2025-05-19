@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/iwind/TeaGo/types"
 	timeutil "github.com/iwind/TeaGo/utils/time"
 	"regexp"

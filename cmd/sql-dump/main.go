@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/TeaOSLab/EdgeAPI/internal/setup"
+	"github.com/dashenmiren/EdgeAPI/internal/setup"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"
 	"go/format"

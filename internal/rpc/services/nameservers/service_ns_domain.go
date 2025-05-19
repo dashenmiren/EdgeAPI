@@ -4,11 +4,11 @@ package nameservers
 
 import (
 	"context"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/nameservers"
-	"github.com/TeaOSLab/EdgeAPI/internal/rpc/services"
-	rpcutils "github.com/TeaOSLab/EdgeAPI/internal/rpc/utils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/nameservers"
+	"github.com/dashenmiren/EdgeAPI/internal/rpc/services"
+	rpcutils "github.com/dashenmiren/EdgeAPI/internal/rpc/utils"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
 // NSDomainService 域名相关服务

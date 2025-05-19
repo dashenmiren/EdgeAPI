@@ -1,9 +1,9 @@
 package acme
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"strings"
 )

@@ -3,7 +3,7 @@ package installers
 import (
 	"bytes"
 	"errors"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
 	"path/filepath"
 	"regexp"
 )

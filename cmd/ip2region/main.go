@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/regions"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/regions"
 	"github.com/iwind/TeaGo/Tea"
 	_ "github.com/iwind/TeaGo/bootstrap"
 	"github.com/iwind/TeaGo/dbs"

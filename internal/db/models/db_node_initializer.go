@@ -2,8 +2,8 @@ package models
 
 import (
 	"fmt"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/logs"

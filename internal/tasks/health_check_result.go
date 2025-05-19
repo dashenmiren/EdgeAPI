@@ -1,6 +1,6 @@
 package tasks
 
-import "github.com/TeaOSLab/EdgeAPI/internal/db/models"
+import "github.com/dashenmiren/EdgeAPI/internal/db/models"
 
 type HealthCheckResult struct {
 	Node     *models.Node

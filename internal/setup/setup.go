@@ -2,10 +2,10 @@ package setup
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/configs"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
+	"github.com/dashenmiren/EdgeAPI/internal/configs"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 	"github.com/go-yaml/yaml"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/cmd"

@@ -2,7 +2,7 @@ package configs
 
 import (
 	"fmt"
-	teaconst "github.com/TeaOSLab/EdgeAPI/internal/const"
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/go-yaml/yaml"
 	"github.com/iwind/TeaGo/Tea"
 	"io/ioutil"

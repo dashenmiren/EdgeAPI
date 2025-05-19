@@ -3,9 +3,9 @@
 package nodes
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/rpc/services"
-	"github.com/TeaOSLab/EdgeAPI/internal/rpc/services/nameservers"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeAPI/internal/rpc/services"
+	"github.com/dashenmiren/EdgeAPI/internal/rpc/services/nameservers"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 	"google.golang.org/grpc"
 )
 

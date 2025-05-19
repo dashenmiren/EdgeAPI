@@ -2,7 +2,7 @@ package models
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeCommon/pkg/dnsconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/dnsconfigs"
 )
 
 // 解析DNS配置

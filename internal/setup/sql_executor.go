@@ -1,8 +1,8 @@
 package setup
 
 import (
-	teaconst "github.com/TeaOSLab/EdgeAPI/internal/const"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/go-yaml/yaml"
 	"github.com/iwind/TeaGo/Tea"

@@ -1,7 +1,7 @@
 package dnsclients
 
 import (
-	teaconst "github.com/TeaOSLab/EdgeAPI/internal/const"
+	teaconst "github.com/dashenmiren/EdgeAPI/internal/const"
 	"github.com/iwind/TeaGo/maps"
 )
 

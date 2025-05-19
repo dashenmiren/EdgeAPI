@@ -1,7 +1,7 @@
 package setup
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"
 	"regexp"

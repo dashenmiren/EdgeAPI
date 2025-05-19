@@ -4,9 +4,9 @@ package nameservers
 
 import (
 	"context"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/nameservers"
-	"github.com/TeaOSLab/EdgeAPI/internal/rpc/services"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/nameservers"
+	"github.com/dashenmiren/EdgeAPI/internal/rpc/services"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
 // NSClusterService 域名服务集群相关服务

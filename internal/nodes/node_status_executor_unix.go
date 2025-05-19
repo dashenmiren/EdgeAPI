@@ -3,7 +3,7 @@
 package nodes
 
 import (
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 )

@@ -2,7 +2,7 @@ package dnsclients
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/dnsclients/dnstypes"
+	"github.com/dashenmiren/EdgeAPI/internal/dnsclients/dnstypes"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/logs"
 	"github.com/iwind/TeaGo/maps"

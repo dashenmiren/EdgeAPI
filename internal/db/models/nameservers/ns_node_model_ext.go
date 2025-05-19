@@ -2,8 +2,8 @@ package nameservers
 
 import (
 	"encoding/json"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeCommon/pkg/nodeconfigs"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeCommon/pkg/nodeconfigs"
 	"time"
 )
 

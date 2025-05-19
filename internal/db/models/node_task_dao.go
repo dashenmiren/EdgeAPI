@@ -1,8 +1,8 @@
 package models
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/numberutils"
-	"github.com/TeaOSLab/EdgeCommon/pkg/configutils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
+	"github.com/dashenmiren/EdgeCommon/pkg/configutils"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"

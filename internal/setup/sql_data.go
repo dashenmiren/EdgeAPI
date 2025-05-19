@@ -1,10 +1,10 @@
 package setup
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/acme"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/errors"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/acme"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/errors"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/lists"
 	"github.com/iwind/TeaGo/rands"

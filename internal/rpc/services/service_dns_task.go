@@ -3,9 +3,9 @@ package services
 import (
 	"context"
 	"fmt"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/dns"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/dns"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
 // DNS同步相关任务

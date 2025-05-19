@@ -1,8 +1,8 @@
 package services
 
 import (
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models/stats"
-	"github.com/TeaOSLab/EdgeAPI/internal/remotelogs"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models/stats"
+	"github.com/dashenmiren/EdgeAPI/internal/remotelogs"
 	"github.com/iwind/TeaGo/Tea"
 	"github.com/iwind/TeaGo/dbs"
 	"github.com/iwind/TeaGo/types"

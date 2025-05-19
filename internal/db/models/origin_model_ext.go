@@ -3,7 +3,7 @@ package models
 import (
 	"encoding/json"
 	"errors"
-	"github.com/TeaOSLab/EdgeCommon/pkg/serverconfigs"
+	"github.com/dashenmiren/EdgeCommon/pkg/serverconfigs"
 )
 
 // 解析地址

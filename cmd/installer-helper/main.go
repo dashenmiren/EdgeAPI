@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
 	"net"
 	"os"
 )

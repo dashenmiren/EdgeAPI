@@ -2,8 +2,8 @@ package services
 
 import (
 	"context"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeCommon/pkg/rpc/pb"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeCommon/pkg/rpc/pb"
 )
 
 // 消息发送日志相关服务

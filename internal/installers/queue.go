@@ -3,9 +3,9 @@ package installers
 import (
 	"errors"
 	"fmt"
-	"github.com/TeaOSLab/EdgeAPI/internal/db/models"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils"
-	"github.com/TeaOSLab/EdgeAPI/internal/utils/numberutils"
+	"github.com/dashenmiren/EdgeAPI/internal/db/models"
+	"github.com/dashenmiren/EdgeAPI/internal/utils"
+	"github.com/dashenmiren/EdgeAPI/internal/utils/numberutils"
 	"github.com/iwind/TeaGo/logs"
 	"time"
 )
